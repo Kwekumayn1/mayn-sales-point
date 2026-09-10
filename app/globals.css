@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  ::selection {
+    background-color: #e3b23c;
+    color: #0f1b3d;
+  }
+  a {
+    text-underline-offset: 3px;
+  }
+}
