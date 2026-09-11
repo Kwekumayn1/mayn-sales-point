@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export default function HomePage() {
   return (
     <main>
@@ -13,14 +11,13 @@ export default function HomePage() {
             <a href="#how-it-works" className="hover:text-indigo">How it works</a>
             <a href="#vendors" className="hover:text-indigo">Become a vendor</a>
             <a href="#faq" className="hover:text-indigo">FAQ</a>
-            <Link href="/login" className="hover:text-indigo">Log in</Link>
+            <a href="/login" className="hover:text-indigo">Log in</a>
           </nav>
-          <Link
-            href="/signup"
+          <a href="/signup"
             className="rounded-pill bg-indigo px-5 py-2 text-sm text-white hover:bg-indigo-light"
           >
             Create account
-          </Link>
+          </a>
         </div>
       </header>
 
@@ -36,18 +33,16 @@ export default function HomePage() {
             and get paid straight to Mobile Money.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
-            <Link
-              href="/signup"
+            <a href="/signup"
               className="rounded-pill bg-gold px-6 py-3 text-sm font-medium text-indigo hover:bg-gold-dark"
             >
               Become a Mayn Sales Point Vendor
-            </Link>
-            <Link
-              href="/signup"
+            </a>
+            <a href="/signup"
               className="rounded-pill border border-indigo px-6 py-3 text-sm font-medium text-indigo hover:bg-indigo hover:text-white"
             >
               Start Shopping
-            </Link>
+            </a>
           </div>
         </div>
 
@@ -209,11 +204,11 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-6 text-sm text-ink/60 md:flex-row md:items-center">
           <span>© {new Date().getFullYear()} Mayn Sales Point</span>
           <div className="flex gap-6">
-            <Link href="/login" className="hover:text-indigo">Log in</Link>
-            <Link href="/signup" className="hover:text-indigo">Create account</Link>
+            <a href="/login" className="hover:text-indigo">Log in</a>
+            <a href="/signup" className="hover:text-indigo">Create account</a>
           </div>
         </div>
       </footer>
     </main>
   );
-}
+          }
