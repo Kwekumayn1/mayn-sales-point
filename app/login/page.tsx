@@ -57,6 +57,9 @@ export default function LoginPage() {
           <input
             required
             type="email"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
@@ -67,6 +70,9 @@ export default function LoginPage() {
           <input
             required
             type="password"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
@@ -94,4 +100,4 @@ export default function LoginPage() {
       </p>
     </main>
   );
-    }
+}
