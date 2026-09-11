@@ -8,8 +8,6 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Middleware already redirects unauthenticated visitors, but a server
-  // component should never assume — check again before rendering anything.
   if (!user) {
     return null;
   }
