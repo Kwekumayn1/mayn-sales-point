@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "./logout-button";
 
@@ -8,6 +9,8 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Middleware already redirects unauthenticated visitors, but a server
+  // component should never assume — check again before rendering anything.
   if (!user) {
     return null;
   }
@@ -51,10 +54,31 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {(profile?.role === "admin" || profile?.role === "super_admin") && (
+        <div className="mt-10 border border-line bg-white p-6">
+          <p className="text-xs uppercase tracking-wide text-ink/50">
+            Admin tools
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Link
+              href="/dashboard/admin/products"
+              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+            >
+              Manage products
+            </Link>
+            <Link
+              href="/dashboard/admin/categories"
+              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+            >
+              Manage categories
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="mt-10 border border-dashed border-line p-6 text-sm text-ink/60">
-        Products, storefront, orders, and wallet tools arrive in the next
-        build phases. This dashboard confirms your account, role, and
-        session are working end-to-end.
+        Vendor storefronts, orders, and wallet tools arrive in the next
+        build phases.
       </div>
     </main>
   );
