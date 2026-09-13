@@ -54,6 +54,26 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      <div className="mt-10 border border-line bg-white p-6">
+        <p className="text-xs uppercase tracking-wide text-ink/50">
+          Vendor tools
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <Link
+            href="/dashboard/store"
+            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+          >
+            My Storefront
+          </Link>
+          <Link
+            href="/dashboard/products"
+            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+          >
+            My Prices
+          </Link>
+        </div>
+      </div>
+
       {(profile?.role === "admin" || profile?.role === "super_admin") && (
         <div className="mt-10 border border-line bg-white p-6">
           <p className="text-xs uppercase tracking-wide text-ink/50">
