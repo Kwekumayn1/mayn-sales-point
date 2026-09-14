@@ -71,6 +71,12 @@ export default async function DashboardPage() {
           >
             My Prices
           </Link>
+          <Link
+            href="/dashboard/orders"
+            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+          >
+            My Orders
+          </Link>
         </div>
       </div>
 
@@ -91,6 +97,12 @@ export default async function DashboardPage() {
               className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
             >
               Manage categories
+            </Link>
+            <Link
+              href="/dashboard/admin/orders"
+              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+            >
+              Manage orders
             </Link>
           </div>
         </div>
