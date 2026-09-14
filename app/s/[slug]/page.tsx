@@ -50,15 +50,15 @@ export default async function StorefrontPage({
             <p className="mt-3 font-display text-lg text-indigo">
               GH₵{Number(item.selling_price).toFixed(2)}
             </p>
-            <button
-              disabled
-              className="mt-3 w-full rounded-pill bg-indigo px-4 py-2 text-sm font-medium text-white opacity-60"
+            <a
+              href={`/checkout?vendor=${vendor.vendor_id}&product=${item.products.id}`}
+              className="mt-3 block w-full rounded-pill bg-indigo px-4 py-2 text-center text-sm font-medium text-white hover:bg-indigo-light"
             >
-              Buy — coming soon
-            </button>
+              Buy
+            </a>
           </div>
         ))}
       </div>
     </main>
   );
-            }
+}
