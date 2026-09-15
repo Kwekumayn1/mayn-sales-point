@@ -21,6 +21,13 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
+  const { data: walletTxns } = await supabase
+    .from("wallet_transactions")
+    .select("amount")
+    .eq("vendor_id", user.id);
+
+  const walletTotal = (walletTxns ?? []).reduce((sum, t) => sum + Number(t.amount), 0);
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-16">
       <div className="flex items-center justify-between">
@@ -49,8 +56,8 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="border border-line bg-white p-5">
-          <p className="text-xs text-ink/50">Wallet balance</p>
-          <p className="mt-1 font-display text-lg">GH₵0.00</p>
+          <p className="text-xs text-ink/50">Combined wallet balance</p>
+          <p className="mt-1 font-display text-lg">GH₵{walletTotal.toFixed(2)}</p>
         </div>
       </div>
 
@@ -76,6 +83,18 @@ export default async function DashboardPage() {
             className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
           >
             My Orders
+          </Link>
+          <Link
+            href="/dashboard/wallet"
+            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+          >
+            My Wallet
+          </Link>
+          <Link
+            href="/dashboard/wallet-order"
+            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+          >
+            Buy for Customer
           </Link>
         </div>
       </div>
@@ -104,14 +123,26 @@ export default async function DashboardPage() {
             >
               Manage orders
             </Link>
+            <Link
+              href="/dashboard/admin/wallets"
+              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+            >
+              Wallet top-ups
+            </Link>
+            <Link
+              href="/dashboard/admin/withdrawals"
+              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+            >
+              Withdrawals
+            </Link>
           </div>
         </div>
       )}
 
       <div className="mt-10 border border-dashed border-line p-6 text-sm text-ink/60">
-        Vendor storefronts, orders, and wallet tools arrive in the next
-        build phases.
+        More admin reporting and the payment gateway integration arrive in
+        the next build phases.
       </div>
     </main>
   );
-}
+        }
