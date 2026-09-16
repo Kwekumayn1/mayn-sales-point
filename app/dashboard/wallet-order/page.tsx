@@ -107,8 +107,8 @@ export default function WalletOrderPage() {
       <h1 className="mt-1 font-display text-2xl text-indigo">Buy for a Customer</h1>
       <p className="mt-2 text-sm text-ink/60">
         For customers who cannot access your storefront link. This charges
-        your Purchase Wallet the base cost and credits your profit
-        immediately.
+        your Purchase Wallet the base price only — no profit is added here,
+        since you collect your markup directly from the customer yourself.
       </p>
 
       <div className="mt-4 border border-line bg-white p-4">
@@ -140,14 +140,13 @@ export default function WalletOrderPage() {
             >
               {products.map((p) => (
                 <option key={p.product_id} value={p.product_id}>
-                  {p.name} — sells GH₵{p.selling_price.toFixed(2)}
+                  {p.name} — base price GH₵{p.base_price.toFixed(2)}
                 </option>
               ))}
             </select>
             {selected && (
               <p className="mt-1 text-xs text-ink/50">
-                Wallet will be charged GH₵{selected.base_price.toFixed(2)}, your
-                profit GH₵{(selected.selling_price - selected.base_price).toFixed(2)}
+                Your wallet will be charged GH₵{selected.base_price.toFixed(2)}.
               </p>
             )}
           </div>
