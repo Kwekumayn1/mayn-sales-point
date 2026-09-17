@@ -68,27 +68,41 @@ export default function CheckoutPage() {
     setError(null);
     setSubmitting(true);
 
-    const res = await fetch("/api/checkout/initiate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vendorId,
-        productId,
-        customerName: name,
-        customerPhone: phone,
-        customerEmail: email,
-      }),
-    });
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
 
-    const data = await res.json();
+      const res = await fetch("/api/checkout/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorId,
+          productId,
+          customerName: name,
+          customerPhone: phone,
+          customerEmail: email,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
 
-    if (!res.ok || !data.authorizationUrl) {
+      const data = await res.json();
+
+      if (!res.ok || !data.authorizationUrl) {
+        setSubmitting(false);
+        setError(data.error || "Could not start payment. Please try again.");
+        return;
+      }
+
+      window.location.href = data.authorizationUrl;
+    } catch (err: any) {
       setSubmitting(false);
-      setError(data.error || "Could not start payment. Please try again.");
-      return;
+      setError(
+        err?.name === "AbortError"
+          ? "The payment request timed out after 20 seconds. Please try again."
+          : err?.message || "Something went wrong starting payment."
+      );
     }
-
-    window.location.href = data.authorizationUrl;
   }
 
   if (loading) {
@@ -168,4 +182,4 @@ export default function CheckoutPage() {
       </form>
     </main>
   );
-}
+      }
