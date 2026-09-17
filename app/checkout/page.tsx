@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function CheckoutPage() {
@@ -18,7 +17,6 @@ export default function CheckoutPage() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<{ orderNumber: string; price: number } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -70,23 +68,27 @@ export default function CheckoutPage() {
     setError(null);
     setSubmitting(true);
 
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc("create_order", {
-      p_vendor_id: vendorId,
-      p_product_id: productId,
-      p_customer_name: name,
-      p_customer_phone: phone,
-      p_customer_email: email || null,
+    const res = await fetch("/api/checkout/initiate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendorId,
+        productId,
+        customerName: name,
+        customerPhone: phone,
+        customerEmail: email,
+      }),
     });
 
-    setSubmitting(false);
-    if (error) {
-      setError(error.message);
+    const data = await res.json();
+
+    if (!res.ok || !data.authorizationUrl) {
+      setSubmitting(false);
+      setError(data.error || "Could not start payment. Please try again.");
       return;
     }
 
-    const result = Array.isArray(data) ? data[0] : data;
-    setConfirmation({ orderNumber: result.order_number, price: Number(result.unit_price) });
+    window.location.href = data.authorizationUrl;
   }
 
   if (loading) {
@@ -109,34 +111,10 @@ export default function CheckoutPage() {
     );
   }
 
-  if (confirmation) {
-    return (
-      <main className="mx-auto max-w-md px-6 py-16">
-        <h1 className="font-display text-2xl text-indigo">Order placed</h1>
-        <div className="mt-6 border border-line bg-white p-6">
-          <p className="text-xs text-ink/50">Order reference</p>
-          <p className="mt-1 font-display text-lg">{confirmation.orderNumber}</p>
-          <p className="mt-4 text-xs text-ink/50">Amount</p>
-          <p className="mt-1 font-display text-lg">GH₵{confirmation.price.toFixed(2)}</p>
-        </div>
-        <p className="mt-4 text-sm text-ink/60">
-          Save this reference — payment collection is coming in a later
-          update. For now, the vendor has been notified of your order.
-        </p>
-        <Link
-          href={`/order-status?number=${confirmation.orderNumber}`}
-          className="mt-4 inline-block text-sm text-indigo underline"
-        >
-          Check order status
-        </Link>
-      </main>
-    );
-  }
-
   return (
     <main className="mx-auto max-w-md px-6 py-16">
       <p className="text-xs uppercase tracking-wide text-ink/50">
-        {vendorName}'s Store
+        {vendorName} — Store
       </p>
       <h1 className="mt-1 font-display text-2xl text-indigo">{productName}</h1>
       {displayPrice !== null && (
@@ -167,13 +145,15 @@ export default function CheckoutPage() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Email (optional)</label>
+          <label className="text-sm font-medium">Email</label>
           <input
+            required
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
           />
+          <p className="mt-1 text-xs text-ink/50">Needed to send your payment receipt.</p>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
@@ -183,9 +163,9 @@ export default function CheckoutPage() {
           disabled={submitting}
           className="w-full rounded-pill bg-indigo py-3 text-sm font-medium text-white hover:bg-indigo-light disabled:opacity-60"
         >
-          {submitting ? "Placing order…" : "Place order"}
+          {submitting ? "Redirecting to payment…" : "Pay with Mobile Money"}
         </button>
       </form>
     </main>
   );
-    }
+}
