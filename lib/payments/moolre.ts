@@ -63,7 +63,7 @@ export async function initiateMoolrePayment(params: InitiateParams) {
     throw new Error(message || "Could not start payment with Moolre.");
   }
 
-  return { authorizationUrl as string };
+  return { authorizationUrl };
 }
 
 export async function verifyMoolrePayment(reference: string) {
@@ -87,4 +87,4 @@ export async function verifyMoolrePayment(reference: string) {
     amount: result.amount as string | undefined,
     accountNumber: result.accountnumber as string | undefined,
   };
-    }
+      }
