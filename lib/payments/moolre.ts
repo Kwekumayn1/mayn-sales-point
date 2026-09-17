@@ -36,6 +36,46 @@ function authHeaders(): Record<string, string> {
   return headers;
 }
 
+// Fetch with a hard timeout, and always return the raw text alongside
+// whatever we could parse — so a wrong endpoint, auth failure, or
+// non-JSON response is visible instead of causing a silent crash.
+async function safeFetch(url: string, body: object) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    clearTimeout(timeout);
+    throw new Error(
+      `Could not reach Moolre at ${url}: ${e?.name === "AbortError" ? "request timed out after 8s" : e?.message || String(e)}`
+    );
+  }
+  clearTimeout(timeout);
+
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    // Moolre returned something that isn't JSON at all.
+  }
+
+  if (!json) {
+    throw new Error(
+      `Moolre returned a non-JSON response (status ${res.status}) from ${url}: ${text.slice(0, 300)}`
+    );
+  }
+
+  return { status: res.status, json };
+}
+
 export async function initiateMoolrePayment(params: InitiateParams) {
   const body = {
     state: "starter",
@@ -49,37 +89,30 @@ export async function initiateMoolrePayment(params: InitiateParams) {
     expiration_time: 30,
   };
 
-  const res = await fetch(startUrl(), {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(body),
-  });
-
-  const data = await res.json();
-  const authorizationUrl = data?.data?.authorization_url;
+  const { status, json } = await safeFetch(startUrl(), body);
+  const authorizationUrl = json?.data?.authorization_url;
 
   if (!authorizationUrl) {
-    const message = Array.isArray(data?.message) ? data.message[0] : data?.message;
-    throw new Error(message || "Could not start payment with Moolre.");
+    const message = Array.isArray(json?.message) ? json.message[0] : json?.message;
+    throw new Error(
+      message
+        ? `Moolre (status ${status}): ${message}`
+        : `Moolre (status ${status}) did not return a payment link: ${JSON.stringify(json).slice(0, 300)}`
+    );
   }
 
-  return { authorizationUrl };
+  return { authorizationUrl: authorizationUrl as string };
 }
 
 export async function verifyMoolrePayment(reference: string) {
-  const res = await fetch(statusUrl(), {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      type: 1,
-      idtype: "1",
-      id: reference,
-      accountnumber: process.env.MOOLRE_ACCOUNT_NUMBER,
-    }),
+  const { json } = await safeFetch(statusUrl(), {
+    type: 1,
+    idtype: "1",
+    id: reference,
+    accountnumber: process.env.MOOLRE_ACCOUNT_NUMBER,
   });
 
-  const data = await res.json();
-  const result = data?.data ?? {};
+  const result = json?.data ?? {};
 
   return {
     status: String(result.txstatus ?? "").toLowerCase(),
@@ -87,4 +120,4 @@ export async function verifyMoolrePayment(reference: string) {
     amount: result.amount as string | undefined,
     accountNumber: result.accountnumber as string | undefined,
   };
-      }
+    }
