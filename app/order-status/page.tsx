@@ -41,12 +41,32 @@ export default function OrderStatusPage() {
       .eq("order_number", number.trim())
       .single();
 
-    setLoading(false);
     if (error || !data) {
+      setLoading(false);
       setError("No order found with that reference.");
       setOrder(null);
       return;
     }
+
+    if (data.status === "pending_payment") {
+      // Don't just trust what's stored — ask the server to re-check
+      // directly with Moolre in case the webhook hasn't landed yet.
+      try {
+        const res = await fetch("/api/orders/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderNumber: number.trim() }),
+        });
+        const result = await res.json();
+        if (result?.status && result.status !== data.status) {
+          data.status = result.status;
+        }
+      } catch {
+        // If this check fails, just show what we already had.
+      }
+    }
+
+    setLoading(false);
     setOrder(data);
   }
 
@@ -93,4 +113,4 @@ export default function OrderStatusPage() {
       )}
     </main>
   );
-      }
+          }
