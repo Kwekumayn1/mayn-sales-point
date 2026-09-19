@@ -98,7 +98,9 @@ export default function CheckoutPage() {
     } catch (err: any) {
       setSubmitting(false);
       setError(
-        `DEBUG [${err?.name ?? "?"}]: ${err?.message ?? String(err)}`
+        err?.name === "AbortError"
+          ? "The payment request timed out after 20 seconds. Please try again."
+          : err?.message || "Something went wrong starting payment."
       );
     }
   }
@@ -180,4 +182,4 @@ export default function CheckoutPage() {
       </form>
     </main>
   );
-            }
+}
