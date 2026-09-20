@@ -37,7 +37,7 @@ export default function VendorOrdersPage() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id, order_number, customer_name, customer_phone, unit_price, status, created_at, products(name)"
+        "id, order_number, customer_name, customer_phone, unit_price, status, created_at, custom_field_values, products(name)"
       )
       .eq("vendor_id", user.id)
       .order("created_at", { ascending: false });
@@ -85,6 +85,13 @@ export default function VendorOrdersPage() {
                 GH₵{Number(o.unit_price).toFixed(2)} ·{" "}
                 {new Date(o.created_at).toLocaleDateString()}
               </p>
+              {o.custom_field_values && Object.keys(o.custom_field_values).length > 0 && (
+                <p className="mt-1 text-xs text-ink/50">
+                  {Object.entries(o.custom_field_values)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(" · ")}
+                </p>
+              )}
             </div>
             <select
               value={o.status}
@@ -103,4 +110,4 @@ export default function VendorOrdersPage() {
       </div>
     </main>
   );
-              }
+                      }
