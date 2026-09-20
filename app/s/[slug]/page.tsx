@@ -20,7 +20,7 @@ export default async function StorefrontPage({
 
   const { data: items } = await supabase
     .from("vendor_prices")
-    .select("selling_price, products(id, name, description, base_price, is_active)")
+    .select("selling_price, products(id, name, description, base_price, is_active, image_url)")
     .eq("vendor_id", vendor.vendor_id);
 
   const activeItems = (items ?? []).filter((i: any) => i.products?.is_active);
@@ -42,7 +42,15 @@ export default async function StorefrontPage({
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         {activeItems.map((item: any) => (
-          <div key={item.products.id} className="border border-line bg-white p-5">
+          <div key={item.products.id} className="border border-line bg-white">
+            {item.products.image_url && (
+              <img
+                src={item.products.image_url}
+                alt=""
+                className="h-40 w-full object-cover"
+              />
+            )}
+            <div className="p-5">
             <p className="font-medium">{item.products.name}</p>
             {item.products.description && (
               <p className="mt-1 text-sm text-ink/60">{item.products.description}</p>
@@ -56,9 +64,10 @@ export default async function StorefrontPage({
             >
               Buy
             </a>
+            </div>
           </div>
         ))}
       </div>
     </main>
   );
-}
+      }l
