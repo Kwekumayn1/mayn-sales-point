@@ -5,7 +5,14 @@ import { initiateMoolrePayment } from "@/lib/payments/moolre";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { vendorId, productId, customerName, customerPhone, customerEmail } = body;
+    const {
+      vendorId,
+      productId,
+      customerName,
+      customerPhone,
+      customerEmail,
+      customFieldValues,
+    } = body;
 
     if (!vendorId || !productId || !customerName || !customerPhone || !customerEmail) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
@@ -21,6 +28,7 @@ export async function POST(request: Request) {
       p_customer_name: customerName,
       p_customer_phone: customerPhone,
       p_customer_email: customerEmail,
+      p_custom_field_values: customFieldValues || {},
     });
 
     if (error) {
