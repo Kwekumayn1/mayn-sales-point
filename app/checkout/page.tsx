@@ -10,6 +10,7 @@ export default function CheckoutPage() {
   const [productName, setProductName] = useState("");
   const [vendorName, setVendorName] = useState("");
   const [displayPrice, setDisplayPrice] = useState<number | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   const [name, setName] = useState("");
@@ -45,7 +46,7 @@ export default function CheckoutPage() {
 
     const { data: priceRow } = await supabase
       .from("vendor_prices")
-      .select("selling_price, products(name)")
+      .select("selling_price, products(name, image_url)")
       .eq("vendor_id", v)
       .eq("product_id", p)
       .single();
@@ -58,6 +59,7 @@ export default function CheckoutPage() {
 
     setVendorName(vendorRow.full_name ?? "Vendor");
     setProductName((priceRow as any).products?.name ?? "Product");
+    setImageUrl((priceRow as any).products?.image_url ?? null);
     setDisplayPrice(Number(priceRow.selling_price));
     setLoading(false);
   }
@@ -127,6 +129,13 @@ export default function CheckoutPage() {
 
   return (
     <main className="mx-auto max-w-md px-6 py-16">
+      {imageUrl && (
+        <img
+          src={imageUrl}
+          alt=""
+          className="mb-4 h-48 w-full rounded object-cover"
+        />
+      )}
       <p className="text-xs uppercase tracking-wide text-ink/50">
         {vendorName} — Store
       </p>
@@ -182,4 +191,4 @@ export default function CheckoutPage() {
       </form>
     </main>
   );
-}
+    }
