@@ -70,4 +70,4 @@ export default async function StorefrontPage({
       </div>
     </main>
   );
-      }l
+}
