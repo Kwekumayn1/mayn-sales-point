@@ -31,7 +31,7 @@ export default async function AdminProductsPage() {
 
   const { data: products } = await supabase
     .from("products")
-    .select("id, name, base_price, product_type, is_active, sku, product_categories(name)")
+    .select("id, name, base_price, product_type, is_active, sku, image_url, product_categories(name)")
     .order("created_at", { ascending: false });
 
   return (
@@ -54,11 +54,22 @@ export default async function AdminProductsPage() {
         <div className="mt-4 divide-y divide-line border-t border-line">
           {products?.map((p: any) => (
             <div key={p.id} className="flex items-center justify-between py-3 text-sm">
-              <div>
-                <p className="font-medium">{p.name}</p>
-                <p className="text-ink/50">
-                  {p.product_categories?.name ?? "Uncategorized"} · {p.sku || "no SKU"}
-                </p>
+              <div className="flex items-center gap-3">
+                {p.image_url ? (
+                  <img
+                    src={p.image_url}
+                    alt=""
+                    className="h-10 w-10 rounded object-cover"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded bg-paper" />
+                )}
+                <div>
+                  <p className="font-medium">{p.name}</p>
+                  <p className="text-ink/50">
+                    {p.product_categories?.name ?? "Uncategorized"} · {p.sku || "no SKU"}
+                  </p>
+                </div>
               </div>
               <div className="text-right">
                 <p className="font-medium">GH₵{Number(p.base_price).toFixed(2)}</p>
@@ -72,4 +83,4 @@ export default async function AdminProductsPage() {
       </div>
     </main>
   );
-    }
+}
