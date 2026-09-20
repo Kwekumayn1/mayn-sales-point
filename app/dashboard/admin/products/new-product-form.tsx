@@ -14,6 +14,8 @@ export default function NewProductForm({ categories }: { categories: Category[] 
   const [sku, setSku] = useState("");
   const [basePrice, setBasePrice] = useState("");
   const [productType, setProductType] = useState("digital");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +31,29 @@ export default function NewProductForm({ categories }: { categories: Category[] 
 
     setLoading(true);
     const supabase = createClient();
+
+    let imageUrl: string | null = null;
+    if (imageFile) {
+      setUploading(true);
+      const ext = imageFile.name.split(".").pop() || "jpg";
+      const fileName = `${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(fileName, imageFile);
+      setUploading(false);
+
+      if (uploadError) {
+        setLoading(false);
+        setError(uploadError.message);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(fileName);
+      imageUrl = urlData.publicUrl;
+    }
+
     const { error } = await supabase.from("products").insert({
       name,
       description,
@@ -37,6 +62,7 @@ export default function NewProductForm({ categories }: { categories: Category[] 
       base_price: price,
       product_type: productType,
       is_active: true,
+      image_url: imageUrl,
     });
 
     setLoading(false);
@@ -49,6 +75,7 @@ export default function NewProductForm({ categories }: { categories: Category[] 
     setDescription("");
     setSku("");
     setBasePrice("");
+    setImageFile(null);
     router.refresh();
   }
 
@@ -123,6 +150,17 @@ export default function NewProductForm({ categories }: { categories: Category[] 
             <option value="service">Service</option>
           </select>
         </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">Product photo (optional)</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+          className="mt-1 w-full text-sm"
+        />
+        {uploading && <p className="mt-1 text-xs text-ink/50">Uploading photo…</p>}
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
