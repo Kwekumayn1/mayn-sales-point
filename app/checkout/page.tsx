@@ -188,3 +188,44 @@ export default function CheckoutPage() {
         </div>
         <div>
           <label className="text-sm font-medium">Email</label>
+          <input
+            required
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+          />
+          <p className="mt-1 text-xs text-ink/50">Needed to send your payment receipt.</p>
+        </div>
+
+        {customFields.map((f) => (
+          <div key={f.id}>
+            <label className="text-sm font-medium">
+              {f.label}
+              {f.is_required && " *"}
+            </label>
+            <input
+              required={f.is_required}
+              type={f.field_type === "number" ? "number" : f.field_type}
+              value={fieldValues[f.label] ?? ""}
+              onChange={(e) =>
+                setFieldValues((prev) => ({ ...prev, [f.label]: e.target.value }))
+              }
+              className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+            />
+          </div>
+        ))}
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-pill bg-indigo py-3 text-sm font-medium text-white hover:bg-indigo-light disabled:opacity-60"
+        >
+          {submitting ? "Redirecting to payment…" : "Pay with Mobile Money"}
+        </button>
+      </form>
+    </main>
+  );
+    }
