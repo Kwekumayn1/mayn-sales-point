@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Category = { id: string; name: string };
+type CustomField = { label: string; fieldType: string; required: boolean };
 
 export default function NewProductForm({ categories }: { categories: Category[] }) {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function NewProductForm({ categories }: { categories: Category[] 
   const [productType, setProductType] = useState("digital");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,21 +56,48 @@ export default function NewProductForm({ categories }: { categories: Category[] 
       imageUrl = urlData.publicUrl;
     }
 
-    const { error } = await supabase.from("products").insert({
-      name,
-      description,
-      category_id: categoryId || null,
-      sku: sku || null,
-      base_price: price,
-      product_type: productType,
-      is_active: true,
-      image_url: imageUrl,
-    });
+    const { data: newProduct, error } = await supabase
+      .from("products")
+      .insert({
+        name,
+        description,
+        category_id: categoryId || null,
+        sku: sku || null,
+        base_price: price,
+        product_type: productType,
+        is_active: true,
+        image_url: imageUrl,
+      })
+      .select("id")
+      .single();
 
-    setLoading(false);
-    if (error) {
-      setError(error.message);
+    if (error || !newProduct) {
+      setLoading(false);
+      setError(error?.message || "Could not create product.");
       return;
+    }
+
+    const fieldsToInsert = customFields
+      .filter((f) => f.label.trim())
+      .map((f, i) => ({
+        product_id: newProduct.id,
+        label: f.label.trim(),
+        field_type: f.fieldType,
+        is_required: f.required,
+        sort_order: i,
+      }));
+
+    if (fieldsToInsert.length > 0) {
+      const { error: fieldsError } = await supabase
+        .from("product_fields")
+        .insert(fieldsToInsert);
+      if (fieldsError) {
+        setLoading(false);
+        setError(
+          `Product created, but custom fields failed to save: ${fieldsError.message}`
+        );
+        return;
+      }
     }
 
     setName("");
@@ -76,6 +105,8 @@ export default function NewProductForm({ categories }: { categories: Category[] 
     setSku("");
     setBasePrice("");
     setImageFile(null);
+    setCustomFields([]);
+    setLoading(false);
     router.refresh();
   }
 
@@ -163,6 +194,73 @@ export default function NewProductForm({ categories }: { categories: Category[] 
         {uploading && <p className="mt-1 text-xs text-ink/50">Uploading photo…</p>}
       </div>
 
+      <div>
+        <label className="text-sm font-medium">
+          Extra info to collect from customers (optional)
+        </label>
+        <p className="mt-1 text-xs text-ink/50">
+          e.g. "Account Number" for a top-up, "Size" for clothing.
+        </p>
+        <div className="mt-2 space-y-2">
+          {customFields.map((field, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <input
+                value={field.label}
+                onChange={(e) => {
+                  const next = [...customFields];
+                  next[i] = { ...next[i], label: e.target.value };
+                  setCustomFields(next);
+                }}
+                placeholder="Field label"
+                className="flex-1 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+              />
+              <select
+                value={field.fieldType}
+                onChange={(e) => {
+                  const next = [...customFields];
+                  next[i] = { ...next[i], fieldType: e.target.value };
+                  setCustomFields(next);
+                }}
+                className="border border-line px-2 py-2 text-sm outline-none focus:border-indigo"
+              >
+                <option value="text">Text</option>
+                <option value="tel">Phone</option>
+                <option value="email">Email</option>
+                <option value="number">Number</option>
+              </select>
+              <label className="flex items-center gap-1 text-xs text-ink/60">
+                <input
+                  type="checkbox"
+                  checked={field.required}
+                  onChange={(e) => {
+                    const next = [...customFields];
+                    next[i] = { ...next[i], required: e.target.checked };
+                    setCustomFields(next);
+                  }}
+                />
+                Required
+              </label>
+              <button
+                type="button"
+                onClick={() => setCustomFields(customFields.filter((_, j) => j !== i))}
+                className="text-xs text-red-600"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setCustomFields([...customFields, { label: "", fieldType: "text", required: true }])
+          }
+          className="mt-2 text-sm text-indigo underline"
+        >
+          + Add a field
+        </button>
+      </div>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
@@ -174,4 +272,4 @@ export default function NewProductForm({ categories }: { categories: Category[] 
       </button>
     </form>
   );
-      }
+}
