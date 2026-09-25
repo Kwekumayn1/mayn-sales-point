@@ -14,9 +14,8 @@ const STATUS_OPTIONS = [
   "failed",
 ];
 
-export default function AdminOrdersPage() {
+export default function VendorOrdersPage() {
   const [loading, setLoading] = useState(true);
-  const [allowed, setAllowed] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -35,25 +34,12 @@ export default function AdminOrdersPage() {
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
-    setAllowed(isAdmin);
-
-    if (!isAdmin) {
-      setLoading(false);
-      return;
-    }
-
     const { data } = await supabase
       .from("orders")
       .select(
-        "id, order_number, customer_name, customer_phone, unit_price, base_price, status, created_at, custom_field_values, products(name), profiles(full_name)"
+        "id, order_number, customer_name, customer_phone, unit_price, status, created_at, custom_field_values, products(name)"
       )
+      .eq("vendor_id", user.id)
       .order("created_at", { ascending: false });
 
     setOrders(data ?? []);
@@ -76,21 +62,15 @@ export default function AdminOrdersPage() {
     );
   }
 
-  if (!allowed) {
-    return (
-      <main className="mx-auto max-w-4xl px-6 py-16 text-sm text-ink/60">
-        You do not have access to this page.
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto max-w-5xl px-6 py-16">
-      <p className="text-xs uppercase tracking-wide text-ink/50">Admin</p>
-      <h1 className="mt-1 font-display text-2xl text-indigo">All Orders</h1>
+    <main className="mx-auto max-w-4xl px-6 py-16">
+      <p className="text-xs uppercase tracking-wide text-ink/50">Dashboard</p>
+      <h1 className="mt-1 font-display text-2xl text-indigo">My Orders</h1>
 
       {orders.length === 0 && (
-        <p className="mt-8 text-sm text-ink/60">No orders yet.</p>
+        <p className="mt-8 text-sm text-ink/60">
+          No orders yet — share your storefront link to start selling.
+        </p>
       )}
 
       <div className="mt-8 divide-y divide-line border-t border-line">
@@ -99,14 +79,12 @@ export default function AdminOrdersPage() {
             <div>
               <p className="font-medium">{o.products?.name ?? "Product"}</p>
               <p className="text-xs text-ink/50">
-                {o.order_number} · Vendor: {o.profiles?.full_name ?? "Unknown"}
+                {o.order_number}
+                {(o.customer_name || o.customer_phone) &&
+                  ` · ${[o.customer_name, o.customer_phone].filter(Boolean).join(" · ")}`}
               </p>
               <p className="text-xs text-ink/50">
-                {o.customer_name} · {o.customer_phone}
-              </p>
-              <p className="text-xs text-ink/50">
-                Base GH₵{Number(o.base_price).toFixed(2)} · Sold GH₵
-                {Number(o.unit_price).toFixed(2)} ·{" "}
+                GH₵{Number(o.unit_price).toFixed(2)} ·{" "}
                 {new Date(o.created_at).toLocaleDateString()}
               </p>
               {o.custom_field_values && Object.keys(o.custom_field_values).length > 0 && (
@@ -134,4 +112,4 @@ export default function AdminOrdersPage() {
       </div>
     </main>
   );
-                }
+                             }
