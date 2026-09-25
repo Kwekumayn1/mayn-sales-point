@@ -5,16 +5,9 @@ import { initiateMoolrePayment } from "@/lib/payments/moolre";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const {
-      vendorId,
-      productId,
-      customerName,
-      customerPhone,
-      customerEmail,
-      customFieldValues,
-    } = body;
+    const { vendorId, productId, customFieldValues } = body;
 
-    if (!vendorId || !productId || !customerName || !customerPhone || !customerEmail) {
+    if (!vendorId || !productId) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
@@ -25,9 +18,6 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.rpc("create_order", {
       p_vendor_id: vendorId,
       p_product_id: productId,
-      p_customer_name: customerName,
-      p_customer_phone: customerPhone,
-      p_customer_email: customerEmail,
       p_custom_field_values: customFieldValues || {},
     });
 
@@ -48,10 +38,15 @@ export async function POST(request: Request) {
 
     const siteUrl = process.env.SITE_URL || request.headers.get("origin") || "";
 
+    // Moolre's API requires an email even though we no longer collect one
+    // from the customer by default — this placeholder is only used
+    // internally for the payment request, never shown to anyone.
+    const placeholderEmail = `${orderNumber.toLowerCase()}@no-email.maynsalespoint.app`;
+
     try {
       const { authorizationUrl } = await initiateMoolrePayment({
         reference: orderNumber,
-        email: customerEmail,
+        email: placeholderEmail,
         amount: amount.toFixed(2),
         callback: `${siteUrl}/api/moolre/webhook`,
         redirect: `${siteUrl}/order-status?number=${orderNumber}`,
@@ -59,16 +54,12 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ authorizationUrl, orderNumber });
     } catch (e: any) {
-      // The order already exists as pending_payment — the customer can
-      // retry, or an admin can follow up, but nothing is lost.
       return NextResponse.json(
         { error: e.message || "Could not start payment.", orderNumber },
         { status: 502 }
       );
     }
   } catch (err: any) {
-    // Catch-all so a crash anywhere above always returns real JSON with
-    // the actual reason, instead of a generic HTML error page.
     return NextResponse.json(
       { error: err?.message || "Unexpected server error." },
       { status: 500 }
