@@ -15,9 +15,6 @@ export default function CheckoutPage() {
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [notFound, setNotFound] = useState(false);
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,9 +95,6 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           vendorId,
           productId,
-          customerName: name,
-          customerPhone: phone,
-          customerEmail: email,
           customFieldValues: fieldValues,
         }),
         signal: controller.signal,
@@ -166,37 +160,11 @@ export default function CheckoutPage() {
       )}
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-        <div>
-          <label className="text-sm font-medium">Full name</label>
-          <input
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Phone number</label>
-          <input
-            required
-            type="tel"
-            placeholder="024XXXXXXX"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Email</label>
-          <input
-            required
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-          />
-          <p className="mt-1 text-xs text-ink/50">Needed to send your payment receipt.</p>
-        </div>
+        {customFields.length === 0 && (
+          <p className="text-sm text-ink/60">
+            No extra details needed — just confirm your purchase below.
+          </p>
+        )}
 
         {customFields.map((f) => (
           <div key={f.id}>
@@ -228,4 +196,4 @@ export default function CheckoutPage() {
       </form>
     </main>
   );
-    }
+                         }
