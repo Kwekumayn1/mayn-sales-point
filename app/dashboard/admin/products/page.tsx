@@ -25,6 +25,13 @@ export default function AdminProductsPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [variantsCache, setVariantsCache] = useState<Record<string, any[]>>({});
+  const [newVariantName, setNewVariantName] = useState("");
+  const [newVariantPrice, setNewVariantPrice] = useState("");
+  const [variantBusy, setVariantBusy] = useState(false);
+  const [variantError, setVariantError] = useState<string | null>(null);
+
   useEffect(() => {
     void load();
   }, []);
@@ -184,6 +191,81 @@ export default function AdminProductsPage() {
     void load();
   }
 
+  async function loadVariants(productId: string) {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("product_variants")
+      .select("id, name, base_price, is_active")
+      .eq("product_id", productId)
+      .order("sort_order");
+    setVariantsCache((prev) => ({ ...prev, [productId]: data ?? [] }));
+  }
+
+  async function handleToggleExpand(productId: string) {
+    if (expandedId === productId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(productId);
+    setVariantError(null);
+    setNewVariantName("");
+    setNewVariantPrice("");
+    if (!variantsCache[productId]) {
+      await loadVariants(productId);
+    }
+  }
+
+  async function handleAddVariant(productId: string) {
+    setVariantError(null);
+    const price = Number(newVariantPrice);
+    if (!newVariantName.trim()) {
+      setVariantError("Enter a name for this sub-product.");
+      return;
+    }
+    if (Number.isNaN(price) || price < 0) {
+      setVariantError("Enter a valid price.");
+      return;
+    }
+
+    setVariantBusy(true);
+    const supabase = createClient();
+    const existing = variantsCache[productId] ?? [];
+    const { error } = await supabase.from("product_variants").insert({
+      product_id: productId,
+      name: newVariantName.trim(),
+      base_price: price,
+      is_active: true,
+      sort_order: existing.length,
+    });
+    setVariantBusy(false);
+
+    if (error) {
+      setVariantError(error.message);
+      return;
+    }
+
+    setNewVariantName("");
+    setNewVariantPrice("");
+    await loadVariants(productId);
+  }
+
+  async function handleDeleteVariant(variantId: string, productId: string) {
+    if (!confirm("Delete this sub-product? This cannot be undone.")) return;
+    setVariantBusy(true);
+    const supabase = createClient();
+    const { error } = await supabase.from("product_variants").delete().eq("id", variantId);
+    setVariantBusy(false);
+    if (error) {
+      setVariantError(
+        error.message.toLowerCase().includes("foreign key")
+          ? "Can't delete — this sub-product already has orders."
+          : error.message
+      );
+      return;
+    }
+    await loadVariants(productId);
+  }
+
   if (loading) {
     return (
       <main className="mx-auto max-w-4xl px-6 py-16 text-sm text-ink/60">
@@ -264,6 +346,9 @@ export default function AdminProductsPage() {
                 onChange={(e) => setBasePrice(e.target.value)}
                 className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
               />
+              <p className="mt-1 text-xs text-ink/50">
+                Used if this product has no sub-products. Ignored otherwise.
+              </p>
             </div>
             <div>
               <label className="text-sm font-medium">Type</label>
@@ -381,53 +466,95 @@ export default function AdminProductsPage() {
         )}
         <div className="mt-4 divide-y divide-line border-t border-line">
           {products.map((p: any) => (
-            <div
-              key={p.id}
-              className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"
-            >
-              <div className="flex items-center gap-3">
-                {p.image_url ? (
-                  <img
-                    src={p.image_url}
-                    alt=""
-                    className="h-10 w-10 rounded object-cover"
-                  />
-                ) : (
-                  <div className="h-10 w-10 rounded bg-paper" />
-                )}
-                <div>
-                  <p className="font-medium">{p.name}</p>
-                  <p className="text-ink/50">
-                    {p.product_categories?.name ?? "Uncategorized"} · {p.sku || "no SKU"}
-                  </p>
+            <div key={p.id} className="py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {p.image_url ? (
+                    <img
+                      src={p.image_url}
+                      alt=""
+                      className="h-10 w-10 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded bg-paper" />
+                  )}
+                  <div>
+                    <p className="font-medium">{p.name}</p>
+                    <p className="text-ink/50">
+                      {p.product_categories?.name ?? "Uncategorized"} · {p.sku || "no SKU"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="font-medium">GH₵{Number(p.base_price).toFixed(2)}</p>
+                    <p className={p.is_active ? "text-leaf" : "text-ink/40"}>
+                      {p.is_active ? "Active" : "Inactive"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleExpand(p.id)}
+                    className="rounded-pill border border-line px-3 py-1 text-xs"
+                  >
+                    {expandedId === p.id ? "Hide sub-products" : "Sub-products"}
+                  </button>
+                  <button
+                    onClick={() => handleToggleActive(p.id, p.is_active)}
+                    disabled={actionId === p.id}
+                    className="rounded-pill border border-line px-3 py-1 text-xs disabled:opacity-60"
+                  >
+                    {p.is_active ? "Deactivate" : "Activate"}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(p.id)}
+                    disabled={actionId === p.id}
+                    className="rounded-pill border border-red-200 px-3 py-1 text-xs text-red-600 disabled:opacity-60"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="font-medium">GH₵{Number(p.base_price).toFixed(2)}</p>
-                  <p className={p.is_active ? "text-leaf" : "text-ink/40"}>
-                    {p.is_active ? "Active" : "Inactive"}
+
+              {expandedId === p.id && (
+                <div className="mt-3 border border-line bg-paper p-4">
+                  <p className="text-xs uppercase tracking-wide text-ink/50">
+                    Sub-products for {p.name}
                   </p>
-                </div>
-                <button
-                  onClick={() => handleToggleActive(p.id, p.is_active)}
-                  disabled={actionId === p.id}
-                  className="rounded-pill border border-line px-3 py-1 text-xs disabled:opacity-60"
-                >
-                  {p.is_active ? "Deactivate" : "Activate"}
-                </button>
-                <button
-                  onClick={() => handleDelete(p.id)}
-                  disabled={actionId === p.id}
-                  className="rounded-pill border border-red-200 px-3 py-1 text-xs text-red-600 disabled:opacity-60"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </main>
-  );
-        }
+                  <p className="mt-1 text-xs text-ink/50">
+                    If this product has any sub-products listed here, customers pick one on
+                    your storefront instead of buying the base product directly.
+                  </p>
+
+                  <div className="mt-3 space-y-2">
+                    {(variantsCache[p.id] ?? []).length === 0 && (
+                      <p className="text-xs text-ink/50">No sub-products yet.</p>
+                    )}
+                    {(variantsCache[p.id] ?? []).map((v: any) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between border border-line bg-white px-3 py-2"
+                      >
+                        <span>
+                          {v.name} — GH₵{Number(v.base_price).toFixed(2)}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteVariant(v.id, p.id)}
+                          disabled={variantBusy}
+                          className="text-xs text-red-600 disabled:opacity-60"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                      value={newVariantName}
+                      onChange={(e) => setNewVariantName(e.target.value)}
+                      placeholder="e.g. 10GB - 30 days"
+                      className="flex-1 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+                    />
+                    <input
+                      value={newVariantPrice}
+                      onChange={(e) => setNewVariantPrice(e.target.val
