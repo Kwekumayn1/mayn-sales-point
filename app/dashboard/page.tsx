@@ -96,6 +96,12 @@ export default async function DashboardPage() {
           >
             Buy for Customer
           </Link>
+          <Link
+            href="/dashboard/affiliates"
+            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
+          >
+            My Affiliates
+          </Link>
         </div>
       </div>
 
@@ -140,9 +146,8 @@ export default async function DashboardPage() {
       )}
 
       <div className="mt-10 border border-dashed border-line p-6 text-sm text-ink/60">
-        More admin reporting and the payment gateway integration arrive in
-        the next build phases.
+        More admin reporting arrives in a future update.
       </div>
     </main>
   );
-        }
+      }
