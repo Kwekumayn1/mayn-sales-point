@@ -7,7 +7,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [productId, setProductId] = useState<string | null>(null);
-  const [productName, setProductName] = useState("");
+  const [variantId, setVariantId] = useState<string | null>(null);
+  const [itemLabel, setItemLabel] = useState("");
   const [vendorName, setVendorName] = useState("");
   const [displayPrice, setDisplayPrice] = useState<number | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -22,19 +23,25 @@ export default function CheckoutPage() {
     const params = new URLSearchParams(window.location.search);
     const v = params.get("vendor");
     const p = params.get("product");
+    const variant = params.get("variant");
     setVendorId(v);
-    setProductId(p);
 
-    if (!v || !p) {
+    if (!v || (!p && !variant)) {
       setNotFound(true);
       setLoading(false);
       return;
     }
 
-    void loadDetails(v, p);
+    if (variant) {
+      setVariantId(variant);
+      void loadVariantDetails(v, variant);
+    } else if (p) {
+      setProductId(p);
+      void loadProductDetails(v, p);
+    }
   }, []);
 
-  async function loadDetails(v: string, p: string) {
+  async function loadProductDetails(v: string, p: string) {
     const supabase = createClient();
 
     const { data: vendorRow } = await supabase
@@ -57,7 +64,7 @@ export default function CheckoutPage() {
     }
 
     setVendorName(vendorRow.full_name ?? "Vendor");
-    setProductName((priceRow as any).products?.name ?? "Product");
+    setItemLabel((priceRow as any).products?.name ?? "Product");
     setImageUrl((priceRow as any).products?.image_url ?? null);
     setDisplayPrice(Number(priceRow.selling_price));
 
@@ -71,9 +78,56 @@ export default function CheckoutPage() {
     setLoading(false);
   }
 
+  async function loadVariantDetails(v: string, variantIdParam: string) {
+    const supabase = createClient();
+
+    const { data: vendorRow } = await supabase
+      .from("storefronts")
+      .select("full_name")
+      .eq("vendor_id", v)
+      .single();
+
+    const { data: priceRow } = await supabase
+      .from("vendor_variant_prices")
+      .select(
+        "selling_price, product_variants(name, product_id, products(name, image_url))"
+      )
+      .eq("vendor_id", v)
+      .eq("variant_id", variantIdParam)
+      .single();
+
+    if (!vendorRow || !priceRow) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
+
+    const variantInfo = (priceRow as any).product_variants;
+    const productInfo = variantInfo?.products;
+    const pId = variantInfo?.product_id;
+
+    setVendorName(vendorRow.full_name ?? "Vendor");
+    setItemLabel(
+      productInfo?.name ? `${productInfo.name} — ${variantInfo.name}` : variantInfo?.name ?? "Item"
+    );
+    setImageUrl(productInfo?.image_url ?? null);
+    setDisplayPrice(Number(priceRow.selling_price));
+
+    if (pId) {
+      const { data: fields } = await supabase
+        .from("product_fields")
+        .select("id, label, field_type, is_required")
+        .eq("product_id", pId)
+        .order("sort_order");
+      setCustomFields(fields ?? []);
+    }
+
+    setLoading(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!vendorId || !productId) return;
+    if (!vendorId || (!productId && !variantId)) return;
     setError(null);
 
     for (const f of customFields) {
@@ -95,6 +149,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           vendorId,
           productId,
+          variantId,
           customFieldValues: fieldValues,
         }),
         signal: controller.signal,
@@ -131,10 +186,10 @@ export default function CheckoutPage() {
   if (notFound) {
     return (
       <main className="mx-auto max-w-md px-6 py-16">
-        <h1 className="font-display text-2xl text-indigo">Product not found</h1>
+        <h1 className="font-display text-2xl text-indigo">Item not found</h1>
         <p className="mt-3 text-sm text-ink/60">
           This checkout link looks incomplete or the vendor no longer offers
-          this product.
+          this item.
         </p>
       </main>
     );
@@ -152,7 +207,7 @@ export default function CheckoutPage() {
       <p className="text-xs uppercase tracking-wide text-ink/50">
         {vendorName} — Store
       </p>
-      <h1 className="mt-1 font-display text-2xl text-indigo">{productName}</h1>
+      <h1 className="mt-1 font-display text-2xl text-indigo">{itemLabel}</h1>
       {displayPrice !== null && (
         <p className="mt-2 font-display text-lg text-indigo">
           GH₵{displayPrice.toFixed(2)}
@@ -196,4 +251,4 @@ export default function CheckoutPage() {
       </form>
     </main>
   );
-                         }
+}
