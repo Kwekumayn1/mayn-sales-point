@@ -557,4 +557,28 @@ export default function AdminProductsPage() {
                     />
                     <input
                       value={newVariantPrice}
-                      onChange={(e) => setNewVariantPrice(e.target.val
+                      onChange={(e) => setNewVariantPrice(e.target.value)}
+                      inputMode="decimal"
+                      placeholder="Price GH₵"
+                      className="w-28 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+                    />
+                    <button
+                      onClick={() => handleAddVariant(p.id)}
+                      disabled={variantBusy}
+                      className="rounded-pill bg-indigo px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
+                    >
+                      {variantBusy ? "Saving…" : "Add"}
+                    </button>
+                  </div>
+                  {variantError && (
+                    <p className="mt-2 text-xs text-red-600">{variantError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
