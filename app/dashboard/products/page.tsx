@@ -9,7 +9,8 @@ type PriceableItem = {
   kind: "product" | "variant";
   id: string;
   displayName: string;
-  basePrice: number;
+  floorPrice: number;
+  floorIsParent: boolean;
   sku: string | null;
 };
 
@@ -39,10 +40,11 @@ export default function VendorProductsPage() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, parent_vendor_id")
       .eq("id", user.id)
       .single();
     setRole(profile?.role ?? "customer");
+    const parentId: string | null = profile?.parent_vendor_id ?? null;
 
     const { data: productList } = await supabase
       .from("products")
@@ -56,6 +58,29 @@ export default function VendorProductsPage() {
       .eq("is_active", true)
       .order("sort_order");
 
+    // If I was referred by a parent vendor, fetch their prices so my
+    // floor is their price (not the admin's base price) wherever they've
+    // priced the same item.
+    let parentProductPrices: Record<string, number> = {};
+    let parentVariantPrices: Record<string, number> = {};
+    if (parentId) {
+      const { data: pp } = await supabase
+        .from("vendor_prices")
+        .select("product_id, selling_price")
+        .eq("vendor_id", parentId);
+      pp?.forEach((p) => {
+        parentProductPrices[p.product_id] = Number(p.selling_price);
+      });
+
+      const { data: pv } = await supabase
+        .from("vendor_variant_prices")
+        .select("variant_id, selling_price")
+        .eq("vendor_id", parentId);
+      pv?.forEach((v) => {
+        parentVariantPrices[v.variant_id] = Number(v.selling_price);
+      });
+    }
+
     const variantsByProduct: Record<string, any[]> = {};
     (variantList ?? []).forEach((v) => {
       variantsByProduct[v.product_id] = variantsByProduct[v.product_id] ?? [];
@@ -67,22 +92,26 @@ export default function VendorProductsPage() {
       const variants = variantsByProduct[p.id] ?? [];
       if (variants.length > 0) {
         variants.forEach((v) => {
+          const parentPrice = parentVariantPrices[v.id];
           builtItems.push({
             key: `variant:${v.id}`,
             kind: "variant",
             id: v.id,
             displayName: `${p.name} — ${v.name}`,
-            basePrice: Number(v.base_price),
+            floorPrice: parentPrice ?? Number(v.base_price),
+            floorIsParent: parentPrice !== undefined,
             sku: p.sku,
           });
         });
       } else {
+        const parentPrice = parentProductPrices[p.id];
         builtItems.push({
           key: `product:${p.id}`,
           kind: "product",
           id: p.id,
           displayName: p.name,
-          basePrice: Number(p.base_price),
+          floorPrice: parentPrice ?? Number(p.base_price),
+          floorIsParent: parentPrice !== undefined,
           sku: p.sku,
         });
       }
@@ -183,8 +212,9 @@ export default function VendorProductsPage() {
       <p className="text-xs uppercase tracking-wide text-ink/50">Dashboard</p>
       <h1 className="mt-1 font-display text-2xl text-indigo">My Prices</h1>
       <p className="mt-2 text-sm text-ink/60">
-        Set your own selling price for each item. Your selling price cannot
-        be below the base price.
+        Set your own selling price for each item. If you joined through
+        someone's referral link, your price must be above theirs — otherwise
+        it must be above the platform's base price.
       </p>
 
       {items.length === 0 && (
@@ -196,7 +226,7 @@ export default function VendorProductsPage() {
           const currentPrice = prices[item.key] ?? "";
           const profit =
             currentPrice && !Number.isNaN(Number(currentPrice))
-              ? (Number(currentPrice) - item.basePrice).toFixed(2)
+              ? (Number(currentPrice) - item.floorPrice).toFixed(2)
               : null;
 
           return (
@@ -205,7 +235,8 @@ export default function VendorProductsPage() {
                 <div>
                   <p className="font-medium">{item.displayName}</p>
                   <p className="text-xs text-ink/50">
-                    Base price GH₵{item.basePrice.toFixed(2)}
+                    {item.floorIsParent ? "Buying price" : "Base price"} GH₵
+                    {item.floorPrice.toFixed(2)}
                     {item.sku ? ` · ${item.sku}` : ""}
                   </p>
                 </div>
@@ -249,4 +280,4 @@ export default function VendorProductsPage() {
       </div>
     </main>
   );
-    }
+      }
