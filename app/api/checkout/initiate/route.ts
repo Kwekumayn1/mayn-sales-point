@@ -5,21 +5,28 @@ import { initiateMoolrePayment } from "@/lib/payments/moolre";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { vendorId, productId, customFieldValues } = body;
+    const { vendorId, productId, variantId, customFieldValues } = body;
 
-    if (!vendorId || !productId) {
+    if (!vendorId || (!productId && !variantId)) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
     const supabase = createClient();
 
-    // Price is recalculated here, server-side, from vendor_prices — the
-    // amount sent to Moolre is never taken from what the browser submitted.
-    const { data, error } = await supabase.rpc("create_order", {
-      p_vendor_id: vendorId,
-      p_product_id: productId,
-      p_custom_field_values: customFieldValues || {},
-    });
+    // Price is recalculated here, server-side, from vendor_prices or
+    // vendor_variant_prices — the amount sent to Moolre is never taken
+    // from what the browser submitted.
+    const { data, error } = variantId
+      ? await supabase.rpc("create_variant_order", {
+          p_vendor_id: vendorId,
+          p_variant_id: variantId,
+          p_custom_field_values: customFieldValues || {},
+        })
+      : await supabase.rpc("create_order", {
+          p_vendor_id: vendorId,
+          p_product_id: productId,
+          p_custom_field_values: customFieldValues || {},
+        });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
@@ -65,4 +72,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
+                               }
