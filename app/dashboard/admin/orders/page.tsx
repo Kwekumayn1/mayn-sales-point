@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 const STATUS_OPTIONS = [
@@ -15,9 +15,9 @@ const STATUS_OPTIONS = [
   "failed",
 ];
 
-// Statuses that count as "paid" for export purposes — anything the
-// customer actually completed payment for, regardless of how far along
-// fulfillment is.
+// Statuses that count as "paid" when no specific status filter is chosen —
+// anything the customer actually completed payment for, regardless of how
+// far along fulfillment is.
 const PAID_STATUSES = ["paid", "processing", "awaiting_fulfillment", "completed", "delivered"];
 
 function sanitizeSheetName(name: string, used: Set<string>) {
@@ -40,6 +40,11 @@ export default function AdminOrdersPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+
+  const [productFilter, setProductFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     void load();
@@ -89,12 +94,41 @@ export default function AdminOrdersPage() {
     void load();
   }
 
+  const productOptions = useMemo(() => {
+    const names = new Set<string>();
+    orders.forEach((o) => {
+      if (o.products?.name) names.add(o.products.name);
+    });
+    return Array.from(names).sort();
+  }, [orders]);
+
+  function getFilteredOrders() {
+    return orders.filter((o) => {
+      if (productFilter !== "all" && o.products?.name !== productFilter) return false;
+
+      if (statusFilter === "all") {
+        if (!PAID_STATUSES.includes(o.status)) return false;
+      } else if (o.status !== statusFilter) {
+        return false;
+      }
+
+      if (dateFrom && new Date(o.created_at) < new Date(dateFrom)) return false;
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (new Date(o.created_at) > to) return false;
+      }
+
+      return true;
+    });
+  }
+
   async function handleExport() {
     setExportError(null);
-    const paidOrders = orders.filter((o) => PAID_STATUSES.includes(o.status));
+    const filtered = getFilteredOrders();
 
-    if (paidOrders.length === 0) {
-      setExportError("No paid orders to export yet.");
+    if (filtered.length === 0) {
+      setExportError("No orders match the current filters.");
       return;
     }
 
@@ -102,10 +136,10 @@ export default function AdminOrdersPage() {
     try {
       const XLSX = await import("xlsx");
 
-      // Group orders by product name — each product gets its own sheet,
-      // since different products collect different custom fields.
+      // Group by product name — each product gets its own sheet, since
+      // different products collect different custom fields.
       const byProduct: Record<string, any[]> = {};
-      paidOrders.forEach((o) => {
+      filtered.forEach((o) => {
         const name = o.products?.name ?? "Unknown product";
         byProduct[name] = byProduct[name] ?? [];
         byProduct[name].push(o);
@@ -115,8 +149,6 @@ export default function AdminOrdersPage() {
       const usedNames = new Set<string>();
 
       Object.entries(byProduct).forEach(([productName, productOrders]) => {
-        // Collect every distinct custom field label used across this
-        // product's orders, in first-seen order.
         const fieldLabels: string[] = [];
         productOrders.forEach((o) => {
           const values = o.custom_field_values || {};
@@ -129,10 +161,8 @@ export default function AdminOrdersPage() {
           const row: Record<string, any> = {
             "Order Number": o.order_number,
             Date: new Date(o.created_at).toLocaleDateString(),
-            Vendor: o.profiles?.full_name ?? "",
-            "Sub-product": o.product_variants?.name ?? "",
-            "Amount (GH₵)": Number(o.unit_price).toFixed(2),
             Status: o.status.replace(/_/g, " "),
+            "Sub-product": o.product_variants?.name ?? "",
           };
           const values = o.custom_field_values || {};
           fieldLabels.forEach((label) => {
@@ -173,20 +203,73 @@ export default function AdminOrdersPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-ink/50">Admin</p>
-          <h1 className="mt-1 font-display text-2xl text-indigo">All Orders</h1>
+      <p className="text-xs uppercase tracking-wide text-ink/50">Admin</p>
+      <h1 className="mt-1 font-display text-2xl text-indigo">All Orders</h1>
+
+      <div className="mt-6 border border-line bg-white p-5">
+        <p className="text-xs uppercase tracking-wide text-ink/50">
+          Export filters
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <div>
+            <label className="text-xs text-ink/50">Product</label>
+            <select
+              value={productFilter}
+              onChange={(e) => setProductFilter(e.target.value)}
+              className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+            >
+              <option value="all">All products</option>
+              {productOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-ink/50">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+            >
+              <option value="all">Any paid status</option>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-ink/50">From</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-ink/50">To</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+            />
+          </div>
         </div>
+
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="rounded-pill bg-indigo px-5 py-2 text-sm font-medium text-white hover:bg-indigo-light disabled:opacity-60"
+          className="mt-4 rounded-pill bg-indigo px-5 py-2 text-sm font-medium text-white hover:bg-indigo-light disabled:opacity-60"
         >
-          {exporting ? "Exporting…" : "Export paid orders (Excel)"}
+          {exporting ? "Exporting…" : "Export to Excel"}
         </button>
+        {exportError && <p className="mt-2 text-sm text-red-600">{exportError}</p>}
       </div>
-      {exportError && <p className="mt-2 text-sm text-red-600">{exportError}</p>}
 
       {orders.length === 0 && (
         <p className="mt-8 text-sm text-ink/60">No orders yet.</p>
@@ -238,4 +321,4 @@ export default function AdminOrdersPage() {
       </div>
     </main>
   );
-}
+         }
