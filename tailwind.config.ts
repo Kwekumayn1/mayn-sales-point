@@ -1,38 +1,34 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  content: [
+    "./app/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./lib/**/*.{ts,tsx}",
+  ],
   theme: {
     extend: {
       colors: {
-        ink: "#101828",
-        indigo: {
-          DEFAULT: "#0F1B3D",
-          light: "#182B5E",
-        },
-        gold: {
-          DEFAULT: "#E3B23C",
-          dark: "#B8871F",
-        },
-        leaf: "#1FAA6D",
-        line: "#D8DCE4",
-        paper: "#FBFBFA",
+        ink: "#0B141A",
+        indigo: { DEFAULT: "#075E54", light: "#128C7E" },
+        gold: { DEFAULT: "#25D366", dark: "#1DAA57" },
+        leaf: "#128C7E",
+        line: "#D5E7DC",
+        paper: "#F1FAF4",
       },
       fontFamily: {
-        display: ["var(--font-fraunces)", "Georgia", "serif"],
-        body: ["var(--font-plex)", "system-ui", "sans-serif"],
+        display: [
+          "-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text",
+          "Helvetica Neue", "Segoe UI", "Roboto", "Arial", "sans-serif",
+        ],
+        body: [
+          "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "SF Pro Display",
+          "Helvetica Neue", "Segoe UI", "Roboto", "Arial", "sans-serif",
+        ],
       },
-      borderRadius: {
-        none: "0px",
-        sm: "2px",
-        DEFAULT: "4px",
-        md: "6px",
-        lg: "10px",
-        pill: "999px",
-      },
+      borderRadius: { pill: "999px" },
     },
   },
   plugins: [],
 };
-
 export default config;
