@@ -3,197 +3,198 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Variant = { variantId: string; name: string; price: number };
+type Variant = { id: string; name: string; price: number; vendorPriceId?: string };
 type Card = {
+  key: string;
   productId: string;
   name: string;
   description: string | null;
   imageUrl: string | null;
-  variants: Variant[];
   directPrice: number | null;
+  variants: Variant[];
 };
 
 export default function StorefrontPage({ params }: { params: { slug: string } }) {
+  const [vendor, setVendor] = useState<any>(null);
+  const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [vendorId, setVendorId] = useState<string | null>(null);
-  const [vendorName, setVendorName] = useState("");
-  const [cards, setCards] = useState<Card[]>([]);
-  const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [variantId, setVariantId] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    void load();
-  }, []);
-
-  async function load() {
-    setLoading(true);
     const supabase = createClient();
+    (async () => {
+      const { data: v } = await supabase
+        .from("storefronts")
+        .select("*")
+        .eq("slug", params.slug)
+        .maybeSingle();
+      if (!v) {
+        setNotFound(true);
+        setLoading(false);
+        return;
+      }
+      setVendor(v);
+      const vendorId = (v as any).vendor_id ?? (v as any).id;
 
-    const { data: vendorRow } = await supabase
-      .from("storefronts")
-      .select("vendor_id, full_name, storefront_slug")
-      .eq("storefront_slug", params.slug)
-      .single();
+      const map = new Map<string, Card>();
 
-    if (!vendorRow) {
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
-
-    setVendorId(vendorRow.vendor_id);
-    setVendorName(vendorRow.full_name ?? "Vendor");
-
-    const cardMap: Record<string, Card> = {};
-
-    const { data: directPrices } = await supabase
-      .from("vendor_prices")
-      .select("selling_price, products(id, name, description, image_url, is_active)")
-      .eq("vendor_id", vendorRow.vendor_id);
-
-    (directPrices ?? []).forEach((row: any) => {
-      const p = row.products;
-      if (!p || !p.is_active) return;
-      cardMap[p.id] = {
-        productId: p.id,
-        name: p.name,
-        description: p.description,
-        imageUrl: p.image_url,
-        variants: [],
-        directPrice: Number(row.selling_price),
-      };
-    });
-
-    const { data: variantPrices } = await supabase
-      .from("vendor_variant_prices")
-      .select(
-        "selling_price, product_variants(id, name, is_active, product_id, products(id, name, description, image_url, is_active))"
-      )
-      .eq("vendor_id", vendorRow.vendor_id);
-
-    (variantPrices ?? []).forEach((row: any) => {
-      const v = row.product_variants;
-      const p = v?.products;
-      if (!v || !v.is_active || !p || !p.is_active) return;
-
-      if (!cardMap[p.id]) {
-        cardMap[p.id] = {
+      const { data: vp } = await supabase
+        .from("vendor_prices")
+        .select("*, products(*)")
+        .eq("vendor_id", vendorId);
+      (vp || []).forEach((row: any) => {
+        const p = row.products;
+        if (!p || p.is_active === false) return;
+        const price = Number(row.selling_price ?? row.price);
+        map.set(p.id, {
+          key: p.id,
           productId: p.id,
           name: p.name,
-          description: p.description,
-          imageUrl: p.image_url,
+          description: p.description ?? null,
+          imageUrl: p.image_url ?? null,
+          directPrice: price,
           variants: [],
-          directPrice: null,
-        };
-      }
-      cardMap[p.id].variants.push({
-        variantId: v.id,
-        name: v.name,
-        price: Number(row.selling_price),
+        });
       });
-    });
 
-    const cardList = Object.values(cardMap);
-    setCards(cardList);
+      const { data: vv } = await supabase
+        .from("vendor_variant_prices")
+        .select("*, product_variants(*, products(*))")
+        .eq("vendor_id", vendorId);
+      (vv || []).forEach((row: any) => {
+        const pv = row.product_variants;
+        const p = pv?.products;
+        if (!pv || !p || p.is_active === false || pv.is_active === false) return;
+        const price = Number(row.selling_price ?? row.price);
+        const existing = map.get(p.id) || {
+          key: p.id,
+          productId: p.id,
+          name: p.name,
+          description: p.description ?? null,
+          imageUrl: p.image_url ?? null,
+          directPrice: null,
+          variants: [],
+        };
+        existing.variants.push({ id: pv.id, name: pv.name ?? pv.label, price });
+        map.set(p.id, existing);
+      });
 
-    const defaults: Record<string, string> = {};
-    cardList.forEach((c) => {
-      if (c.variants.length > 0) defaults[c.productId] = c.variants[0].variantId;
-    });
-    setSelectedVariant(defaults);
+      setCards(Array.from(map.values()));
+      setLoading(false);
+    })();
+  }, [params.slug]);
 
-    setLoading(false);
-  }
+  if (loading) return <main className="p-8 text-center text-indigo-light">Loading…</main>;
+  if (notFound)
+    return <main className="p-8 text-center">This store was not found.</main>;
 
-  if (loading) {
-    return (
-      <main className="mx-auto max-w-3xl px-6 py-16 text-sm text-ink/60">
-        Loading…
-      </main>
-    );
-  }
+  const vendorId = vendor.vendor_id ?? vendor.id;
+  const storeName = vendor.store_name ?? vendor.name ?? vendor.slug;
+  const open = cards.find((c) => c.key === openKey) || null;
 
-  if (notFound) {
-    return (
-      <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="font-display text-2xl text-indigo">Storefront not found</h1>
-      </main>
-    );
+  function selectedVariant(c: Card): Variant | undefined {
+    return c.variants.find((x) => x.id === variantId[c.key]) || c.variants[0];
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
-      <p className="text-xs uppercase tracking-wide text-ink/50">
-        Mayn Sales Point Vendor
-      </p>
-      <h1 className="mt-1 font-display text-2xl text-indigo">
-        {vendorName} — Storefront
-      </h1>
+    <main className="mx-auto max-w-5xl px-4 pb-16">
+      <header className="-mx-4 mb-5 bg-indigo px-5 py-6 text-white shadow-md">
+        <h1 className="text-2xl">{storeName}</h1>
+        <p className="mt-1 text-sm text-white/80">Tap a product to choose and buy</p>
+      </header>
 
       {cards.length === 0 && (
-        <p className="mt-8 text-sm text-ink/60">
-          This vendor has not added any products yet.
-        </p>
+        <p className="py-10 text-center text-sm text-ink/60">No products available yet.</p>
       )}
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2">
-        {cards.map((card) => {
-          const hasVariants = card.variants.length > 0;
-          const currentVariantId = selectedVariant[card.productId];
-          const currentVariant = card.variants.find((v) => v.variantId === currentVariantId);
-          const displayPrice = hasVariants ? currentVariant?.price : card.directPrice;
-
-          const buyHref = hasVariants
-            ? `/checkout?vendor=${vendorId}&variant=${currentVariantId}`
-            : `/checkout?vendor=${vendorId}&product=${card.productId}`;
-
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {cards.map((c) => {
+          const sel = c.variants.length ? selectedVariant(c) : undefined;
+          const fromPrice = c.variants.length
+            ? Math.min(...c.variants.map((x) => x.price))
+            : c.directPrice;
+          const active = openKey === c.key;
           return (
-            <div key={card.productId} className="border border-line bg-white">
-              {card.imageUrl && (
-                <img src={card.imageUrl} alt="" className="h-40 w-full object-cover" />
-              )}
-              <div className="p-5">
-                <p className="font-medium">{card.name}</p>
-                {card.description && (
-                  <p className="mt-1 text-sm text-ink/60">{card.description}</p>
+            <button
+              key={c.key}
+              onClick={() => setOpenKey(active ? null : c.key)}
+              className={`overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition active:scale-95 ${
+                active ? "border-gold ring-2 ring-gold" : "border-line"
+              }`}
+            >
+              <div className="aspect-square w-full bg-paper">
+                {c.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-3xl text-indigo-light/40">▢</div>
                 )}
-
-                {hasVariants && (
-                  <select
-                    value={currentVariantId}
-                    onChange={(e) =>
-                      setSelectedVariant((prev) => ({
-                        ...prev,
-                        [card.productId]: e.target.value,
-                      }))
-                    }
-                    className="mt-3 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-                  >
-                    {card.variants.map((v) => (
-                      <option key={v.variantId} value={v.variantId}>
-                        {v.name} — GH₵{v.price.toFixed(2)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {displayPrice !== undefined && displayPrice !== null && (
-                  <p className="mt-3 font-display text-lg text-indigo">
-                    GH₵{displayPrice.toFixed(2)}
-                  </p>
-                )}
-
-                <a
-                  href={buyHref}
-                  className="mt-3 block w-full rounded-pill bg-indigo px-4 py-2 text-center text-sm font-medium text-white hover:bg-indigo-light"
-                >
-                  Buy
-                </a>
               </div>
-            </div>
+              <div className="p-2.5">
+                <div className="line-clamp-2 text-sm font-semibold leading-tight">{c.name}</div>
+                <div className="mt-1 text-sm font-bold text-indigo">
+                  {c.variants.length ? "From " : ""}GH₵ {fromPrice?.toFixed(2)}
+                </div>
+              </div>
+              {sel && null}
+            </button>
           );
         })}
       </div>
+
+      {open && (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white p-4 shadow-2xl">
+          <div className="mx-auto flex max-w-xl flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-base font-bold">{open.name}</div>
+                {open.description && (
+                  <div className="mt-0.5 text-xs text-ink/60">{open.description}</div>
+                )}
+              </div>
+              <button
+                onClick={() => setOpenKey(null)}
+                className="rounded-pill bg-paper px-3 py-1 text-sm"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {open.variants.length > 0 && (
+              <select
+                value={selectedVariant(open)?.id}
+                onChange={(e) => setVariantId({ ...variantId, [open.key]: e.target.value })}
+                className="w-full rounded-xl border border-line bg-white p-3 text-base"
+              >
+                {open.variants.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name} — GH₵ {x.price.toFixed(2)}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {(() => {
+              const sv = open.variants.length ? selectedVariant(open) : undefined;
+              const price = sv ? sv.price : open.directPrice;
+              const href = sv
+                ? `/checkout?vendor=${vendorId}&variant=${sv.id}`
+                : `/checkout?vendor=${vendorId}&product=${open.productId}`;
+              return (
+                <a
+                  href={href}
+                  className="block rounded-pill bg-gold py-3 text-center text-base font-bold text-white shadow"
+                >
+                  Buy now · GH₵ {price?.toFixed(2)}
+                </a>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </main>
   );
-            }
+          }
