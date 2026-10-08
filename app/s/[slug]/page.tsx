@@ -35,25 +35,27 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
   useEffect(() => {
     const supabase = createClient();
     (async () => {
+      const wanted = decodeURIComponent(params.slug).trim().toLowerCase();
       let v: any = null;
-      let lastError = "";
-      for (const col of ["slug", "store_slug", "username", "handle"]) {
-        const res = await supabase
-          .from("storefronts")
-          .select("*")
-          .eq(col, params.slug)
-          .limit(1);
-        if (res.error) {
-          lastError = col + ": " + res.error.message;
-          continue;
-        }
-        if (res.data && res.data.length > 0) {
-          v = res.data[0];
-          break;
-        }
+
+      const all = await supabase.from("storefronts").select("*").limit(1000);
+      if (all.error) {
+        setDebug("storefronts: " + all.error.message);
+        setNotFound(true);
+        setLoading(false);
+        return;
       }
+      const rows: any[] = all.data || [];
+      v =
+        rows.find((r) =>
+          Object.values(r).some(
+            (x) => typeof x === "string" && x.trim().toLowerCase() === wanted
+          )
+        ) || null;
+
       if (!v) {
-        setDebug(lastError);
+        const cols = rows.length > 0 ? Object.keys(rows[0]).join(", ") : "none";
+        setDebug("rows: " + rows.length + " | columns: " + cols + " | looking for: " + wanted);
         setNotFound(true);
         setLoading(false);
         return;
@@ -120,7 +122,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
     return (
       <main className="p-8 text-center">
         <div>This store was not found.</div>
-        {debug && <div className="mt-3 text-xs text-ink/50">{debug}</div>}
+        {debug && <div className="mt-3 break-words text-xs text-ink/50">{debug}</div>}
       </main>
     );
 
@@ -142,7 +144,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
       {cards.length === 0 && (
         <p className="py-10 text-center text-sm text-ink/60">
           No products available yet.
-          {debug && <span className="mt-2 block text-xs">{debug}</span>}
+          {debug && <span className="mt-2 block break-words text-xs">{debug}</span>}
         </p>
       )}
 
@@ -232,4 +234,4 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
       )}
     </main>
   );
-       }
+    }
