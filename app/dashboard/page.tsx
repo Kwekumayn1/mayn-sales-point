@@ -1,9 +1,4 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import LogoutButton from "./logout-button";
-
-const linkClass =
-  "rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white";
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -32,91 +27,36 @@ export default async function DashboardPage() {
   const walletTotal = (walletTxns ?? []).reduce((sum, t) => sum + Number(t.amount), 0);
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-16">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-ink/50">
-            Mayn Sales Point
-          </p>
-          <h1 className="mt-1 font-display text-2xl text-indigo">
-            Welcome, {profile?.full_name ?? user.email}
-          </h1>
-        </div>
-        <LogoutButton />
-      </div>
+    <main className="mx-auto max-w-4xl px-6 py-10">
+      <p className="text-xs uppercase tracking-wide text-ink/50">
+        Mayn Sales Point
+      </p>
+      <h1 className="mt-1 font-display text-2xl text-indigo">
+        Welcome, {profile?.full_name ?? user.email}
+      </h1>
 
-      <div className="mt-10 grid gap-4 sm:grid-cols-3">
-        <div className="border border-line bg-white p-5">
+      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-line bg-white p-5">
           <p className="text-xs text-ink/50">Role</p>
           <p className="mt-1 font-display text-lg capitalize">
             {profile?.role ?? "customer"}
           </p>
         </div>
-        <div className="border border-line bg-white p-5">
+        <div className="rounded-2xl border border-line bg-white p-5">
           <p className="text-xs text-ink/50">Vendor ID</p>
           <p className="mt-1 font-display text-lg">
             {profile?.vendor_id ?? "Not assigned yet"}
           </p>
         </div>
-        <div className="border border-line bg-white p-5">
+        <div className="rounded-2xl border border-line bg-white p-5">
           <p className="text-xs text-ink/50">Combined wallet balance</p>
           <p className="mt-1 font-display text-lg">GH₵{walletTotal.toFixed(2)}</p>
         </div>
       </div>
 
-      <div className="mt-10 border border-line bg-white p-6">
-        <p className="text-xs uppercase tracking-wide text-ink/50">
-          Vendor tools
-        </p>
-        <div className="mt-3 flex flex-wrap gap-3">
-          <Link href="/dashboard/store" className={linkClass}>
-            My Storefront
-          </Link>
-          <Link href="/dashboard/products" className={linkClass}>
-            My Prices
-          </Link>
-          <Link href="/dashboard/orders" className={linkClass}>
-            My Orders
-          </Link>
-          <Link href="/dashboard/wallet" className={linkClass}>
-            My Wallet
-          </Link>
-          <Link href="/dashboard/wallet-order" className={linkClass}>
-            Buy for Customer
-          </Link>
-          <Link href="/dashboard/affiliates" className={linkClass}>
-            My Affiliates
-          </Link>
-        </div>
+      <div className="mt-8 rounded-2xl border border-dashed border-line p-6 text-sm text-ink/60">
+        Open the menu (☰ at the top left) to reach your tools.
       </div>
-
-      {(profile?.role === "admin" || profile?.role === "super_admin") && (
-        <div className="mt-10 border border-line bg-white p-6">
-          <p className="text-xs uppercase tracking-wide text-ink/50">
-            Admin tools
-          </p>
-          <div className="mt-3 flex flex-wrap gap-3">
-            <Link href="/dashboard/admin/products" className={linkClass}>
-              Manage products
-            </Link>
-            <Link href="/dashboard/admin/categories" className={linkClass}>
-              Manage categories
-            </Link>
-            <Link href="/dashboard/admin/orders" className={linkClass}>
-              Manage orders
-            </Link>
-            <Link href="/dashboard/admin/vendor-prices" className={linkClass}>
-              Set vendor prices
-            </Link>
-            <Link href="/dashboard/admin/wallets" className={linkClass}>
-              Wallet top-ups
-            </Link>
-            <Link href="/dashboard/admin/withdrawals" className={linkClass}>
-              Withdrawals
-            </Link>
-          </div>
-        </div>
-      )}
     </main>
   );
-          }
+}
