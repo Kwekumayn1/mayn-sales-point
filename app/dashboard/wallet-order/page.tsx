@@ -37,6 +37,7 @@ export default function WalletOrderPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
+  const [costs, setCosts] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
 
   const [open, setOpen] = useState<Product | null>(null);
@@ -66,7 +67,7 @@ export default function WalletOrderPage() {
         setLoading(false);
         return;
       }
-      const [p, v, f] = await Promise.all([
+      const [p, v, f, c] = await Promise.all([
         supabase.from("products").select("id,name,base_price").eq("is_active", true).order("name"),
         supabase
           .from("product_variants")
@@ -77,7 +78,11 @@ export default function WalletOrderPage() {
           .from("product_fields")
           .select("id,product_id,label,field_type,is_required,sort_order")
           .order("sort_order"),
+        supabase.rpc("my_buying_prices"),
       ]);
+      const cm: Record<string, number> = {};
+      for (const r of (c.data || []) as any[]) cm[r.kind + ":" + r.item_id] = Number(r.price);
+      setCosts(cm);
       if (p.error) setError(p.error.message);
       setProducts((p.data || []) as Product[]);
       setVariants((v.data || []) as Variant[]);
@@ -88,6 +93,8 @@ export default function WalletOrderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const costOfProduct = (p: Product) => costs["product:" + p.id] ?? Number(p.base_price);
+  const costOfVariant = (v: Variant) => costs["variant:" + v.id] ?? Number(v.base_price);
   const variantsOf = (pid: string) => variants.filter((x) => x.product_id === pid);
   const fieldsOf = (pid: string) => fields.filter((x) => x.product_id === pid);
 
@@ -97,11 +104,11 @@ export default function WalletOrderPage() {
       .filter((p) => !q || p.name.toLowerCase().includes(q))
       .map((p) => {
         const vs = variantsOf(p.id);
-        const price = vs.length ? Math.min(...vs.map((x) => Number(x.base_price))) : Number(p.base_price);
+        const price = vs.length ? Math.min(...vs.map((x) => costOfVariant(x))) : costOfProduct(p);
         return { p, price, hasVariants: vs.length > 0 };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, variants, search]);
+  }, [products, variants, costs, search]);
 
   function openSheet(p: Product) {
     setOpen(p);
@@ -115,7 +122,7 @@ export default function WalletOrderPage() {
   const openVariants = open ? variantsOf(open.id) : [];
   const openFields = open ? fieldsOf(open.id) : [];
   const chosen = openVariants.find((x) => x.id === variantId);
-  const cost = open ? (openVariants.length ? (chosen ? Number(chosen.base_price) : null) : Number(open.base_price)) : null;
+  const cost = open ? (openVariants.length ? (chosen ? costOfVariant(chosen) : null) : costOfProduct(open)) : null;
 
   async function buy() {
     if (!open) return;
@@ -257,7 +264,7 @@ export default function WalletOrderPage() {
                     <option value="">Choose an option</option>
                     {openVariants.map((v) => (
                       <option key={v.id} value={v.id}>
-                        {v.name} - {money(Number(v.base_price))}
+                        {v.name} - {money(costOfVariant(v))}
                       </option>
                     ))}
                   </select>
@@ -294,4 +301,4 @@ export default function WalletOrderPage() {
       )}
     </div>
   );
-  }
+}
