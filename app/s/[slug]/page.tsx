@@ -127,7 +127,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
     );
 
   const vendorId = pick(vendor, ["vendor_id", "user_id", "profile_id", "id"]);
-  const storeName = pick(vendor, ["store_name", "name", "display_name", "slug"]);
+  const storeName = pick(vendor, ["full_name", "store_name", "name", "display_name", "storefront_slug"]);
   const open = cards.find((c) => c.key === openKey) || null;
 
   function selectedVariant(c: Card): Variant | undefined {
