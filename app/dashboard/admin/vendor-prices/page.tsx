@@ -23,6 +23,9 @@ export default function AdminVendorPricesPage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [markup, setMarkup] = useState("10");
+  const [levels, setLevels] = useState<{ lvl: number; vendors: number }[]>([]);
+  const [level, setLevel] = useState<number>(1);
+  const [lvMarkup, setLvMarkup] = useState("10");
 
   useEffect(() => {
     (async () => {
@@ -32,6 +35,10 @@ export default function AdminVendorPricesPage() {
         return;
       }
       setVendors(data || []);
+      const lv = await supabase.rpc("admin_level_counts");
+      if (!lv.error && lv.data) {
+        setLevels(lv.data as { lvl: number; vendors: number }[]);
+      }
     })();
   }, [supabase]);
 
@@ -119,6 +126,41 @@ export default function AdminVendorPricesPage() {
     loadSheet(selected.id);
   }
 
+  async function levelFill(overwrite: boolean) {
+    const pct = Number(lvMarkup);
+    if (!isFinite(pct) || pct < 0) {
+      setMsg({ ok: false, text: "Enter a markup of 0 or more." });
+      return;
+    }
+    const count = levels.find((x) => x.lvl === level)?.vendors ?? 0;
+    if (count === 0) {
+      setMsg({ ok: false, text: "There are no vendors at Level " + level + "." });
+      return;
+    }
+    const ask = overwrite
+      ? "Replace ALL prices for every Level " + level + " vendor (" + count + ") with cost + " + pct + "%?"
+      : "Fill unpriced items for every Level " + level + " vendor (" + count + ") with cost + " + pct + "%?";
+    if (!window.confirm(ask)) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc("admin_fill_level_prices", {
+      p_level: level,
+      p_markup_pct: pct,
+      p_overwrite: overwrite,
+    });
+    setBusy(false);
+    if (error) {
+      setMsg({ ok: false, text: error.message });
+      return;
+    }
+    const d: any = data || {};
+    setMsg({
+      ok: true,
+      text:
+        "Level " + level + " done. Vendors: " + d.vendors + ", prices set: " + d.set +
+        ", kept: " + d.kept + ", skipped: " + d.failed + ".",
+    });
+  }
+
   const q = search.trim().toLowerCase();
   const shown = vendors
     .filter((v) => {
@@ -154,11 +196,66 @@ export default function AdminVendorPricesPage() {
 
       {!selected && (
         <section className="mt-5">
+          <div className="rounded-xl border border-line bg-white p-4">
+            <div className="text-sm font-semibold">Bulk prices by level</div>
+            <p className="mt-1 text-xs text-ink/60">
+              Level 1 = your direct vendors. Level 2 = their sub-vendors, and so on. Do
+              Level 1 first, then Level 2, because each level's cost is the level above's
+              price.
+            </p>
+            {levels.length === 0 ? (
+              <p className="mt-3 text-xs text-ink/50">No vendors yet.</p>
+            ) : (
+              <>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {levels.map((x) => (
+                    <button
+                      key={x.lvl}
+                      onClick={() => setLevel(x.lvl)}
+                      className={`rounded-pill px-4 py-2 text-sm ${
+                        level === x.lvl
+                          ? "bg-indigo font-bold text-white"
+                          : "border border-line bg-white"
+                      }`}
+                    >
+                      Level {x.lvl} · {x.vendors}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    value={lvMarkup}
+                    onChange={(e) => setLvMarkup(e.target.value)}
+                    inputMode="decimal"
+                    className="w-20 rounded-xl border border-line p-2 text-center text-base"
+                  />
+                  <span className="text-sm">% markup on their cost</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    disabled={busy}
+                    onClick={() => levelFill(false)}
+                    className="rounded-pill bg-gold px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    Fill unpriced – Level {level}
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => levelFill(true)}
+                    className="rounded-pill border border-line px-4 py-2 text-sm disabled:opacity-50"
+                  >
+                    Replace all – Level {level}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, phone or Vendor ID"
-            className="w-full rounded-xl border border-line bg-white p-3 text-base"
+            className="mt-5 w-full rounded-xl border border-line bg-white p-3 text-base"
           />
           <div className="mt-3 space-y-2">
             {shown.map((v) => (
@@ -272,4 +369,4 @@ export default function AdminVendorPricesPage() {
       )}
     </main>
   );
-  }
+    }
