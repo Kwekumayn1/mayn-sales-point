@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import LogoutButton from "./logout-button";
@@ -30,9 +30,11 @@ const ADMIN_ITEMS: Item[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "";
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [level, setLevel] = useState<number | null>(null);
 
   useEffect(() => {
     setOpen(false);
@@ -54,10 +56,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setRole(data.role ?? null);
         setName(data.full_name ?? "");
       }
+      const { data: lvl } = await supabase.rpc("my_vendor_level");
+      setLevel(typeof lvl === "number" ? lvl : null);
     })();
   }, []);
 
   const isAdmin = role === "admin" || role === "super_admin";
+  // Affiliates are only for 1st-level vendors. 2nd level and below do not get it.
+  const hideAffiliates = level !== null && level >= 2;
+
+  useEffect(() => {
+    if (hideAffiliates && pathname.startsWith("/dashboard/affiliates")) {
+      router.replace("/dashboard");
+    }
+  }, [hideAffiliates, pathname, router]);
 
   function isActive(href: string) {
     return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
@@ -126,7 +138,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="px-4 pb-1 pt-4 text-xs uppercase tracking-wide text-ink/50">
             Vendor tools
           </div>
-          {renderItems(VENDOR_ITEMS)}
+          {renderItems(
+            hideAffiliates
+              ? VENDOR_ITEMS.filter((it) => it.href !== "/dashboard/affiliates")
+              : VENDOR_ITEMS
+          )}
 
           {isAdmin && (
             <>
@@ -146,4 +162,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="md:pl-72">{children}</div>
     </div>
   );
-  }
+    }
