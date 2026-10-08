@@ -35,6 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [role, setRole] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [level, setLevel] = useState<number | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setOpen(false);
@@ -58,18 +59,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
       const { data: lvl } = await supabase.rpc("my_vendor_level");
       setLevel(typeof lvl === "number" ? lvl : null);
+      setReady(true);
     })();
   }, []);
 
   const isAdmin = role === "admin" || role === "super_admin";
-  // Affiliates are only for 1st-level vendors. 2nd level and below do not get it.
-  const hideAffiliates = level !== null && level >= 2;
+  // Affiliates are only for 1st-level vendors (and admins).
+  // Hidden by default until we know the level, so 2nd-level vendors never see it.
+  const hideAffiliates = !isAdmin && level !== 1;
 
   useEffect(() => {
-    if (hideAffiliates && pathname.startsWith("/dashboard/affiliates")) {
+    if (ready && hideAffiliates && pathname.startsWith("/dashboard/affiliates")) {
       router.replace("/dashboard");
     }
-  }, [hideAffiliates, pathname, router]);
+  }, [ready, hideAffiliates, pathname, router]);
 
   function isActive(href: string) {
     return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
@@ -162,4 +165,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="md:pl-72">{children}</div>
     </div>
   );
-    }
+  }
