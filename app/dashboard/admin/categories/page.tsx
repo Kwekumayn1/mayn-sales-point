@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import NewCategoryForm from "./new-category-form";
+import DeleteCategoryButton from "./delete-category-button";
 
 export default async function AdminCategoriesPage() {
   const supabase = createClient();
@@ -43,11 +44,12 @@ export default async function AdminCategoriesPage() {
           <p className="py-4 text-sm text-ink/60">No categories yet.</p>
         )}
         {categories?.map((c) => (
-          <div key={c.id} className="py-3 text-sm">
-            {c.name}
+          <div key={c.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+            <span>{c.name}</span>
+            <DeleteCategoryButton id={c.id} name={c.name} />
           </div>
         ))}
       </div>
     </main>
   );
-}
+      }
