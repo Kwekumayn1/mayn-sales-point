@@ -2,6 +2,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "./logout-button";
 
+const linkClass =
+  "rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white";
+
 export default async function DashboardPage() {
   const supabase = createClient();
 
@@ -66,40 +69,22 @@ export default async function DashboardPage() {
           Vendor tools
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
-          <Link
-            href="/dashboard/store"
-            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-          >
+          <Link href="/dashboard/store" className={linkClass}>
             My Storefront
           </Link>
-          <Link
-            href="/dashboard/products"
-            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-          >
+          <Link href="/dashboard/products" className={linkClass}>
             My Prices
           </Link>
-          <Link
-            href="/dashboard/orders"
-            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-          >
+          <Link href="/dashboard/orders" className={linkClass}>
             My Orders
           </Link>
-          <Link
-            href="/dashboard/wallet"
-            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-          >
+          <Link href="/dashboard/wallet" className={linkClass}>
             My Wallet
           </Link>
-          <Link
-            href="/dashboard/wallet-order"
-            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-          >
+          <Link href="/dashboard/wallet-order" className={linkClass}>
             Buy for Customer
           </Link>
-          <Link
-            href="/dashboard/affiliates"
-            className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-          >
+          <Link href="/dashboard/affiliates" className={linkClass}>
             My Affiliates
           </Link>
         </div>
@@ -111,43 +96,27 @@ export default async function DashboardPage() {
             Admin tools
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
-            <Link
-              href="/dashboard/admin/products"
-              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-            >
+            <Link href="/dashboard/admin/products" className={linkClass}>
               Manage products
             </Link>
-            <Link
-              href="/dashboard/admin/categories"
-              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-            >
+            <Link href="/dashboard/admin/categories" className={linkClass}>
               Manage categories
             </Link>
-            <Link
-              href="/dashboard/admin/orders"
-              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-            >
+            <Link href="/dashboard/admin/orders" className={linkClass}>
               Manage orders
             </Link>
-            <Link
-              href="/dashboard/admin/wallets"
-              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-            >
+            <Link href="/dashboard/admin/vendor-prices" className={linkClass}>
+              Set vendor prices
+            </Link>
+            <Link href="/dashboard/admin/wallets" className={linkClass}>
               Wallet top-ups
             </Link>
-            <Link
-              href="/dashboard/admin/withdrawals"
-              className="rounded-pill border border-indigo px-5 py-2 text-sm text-indigo hover:bg-indigo hover:text-white"
-            >
+            <Link href="/dashboard/admin/withdrawals" className={linkClass}>
               Withdrawals
             </Link>
           </div>
         </div>
       )}
-
-      <div className="mt-10 border border-dashed border-line p-6 text-sm text-ink/60">
-        More admin reporting arrives in a future update.
-      </div>
     </main>
   );
-      }
+          }
