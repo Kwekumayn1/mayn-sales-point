@@ -124,6 +124,19 @@ export default function OrderStatusPage() {
       }
     }
 
+    if (PAID_STATUSES.includes(data.status)) {
+      try {
+        const rd = await supabase.rpc("get_receipt_details", {
+          p_order_number: number.trim(),
+        });
+        if (!rd.error && rd.data) {
+          data.receipt_details = rd.data;
+        }
+      } catch {
+        // Receipt still works without the extra details.
+      }
+    }
+
     setLoading(false);
     setOrder(data);
   }
@@ -259,4 +272,4 @@ export default function OrderStatusPage() {
       )}
     </main>
   );
-    }
+  }
