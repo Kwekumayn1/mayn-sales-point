@@ -26,6 +26,10 @@ export default function AdminVendorPricesPage() {
   const [levels, setLevels] = useState<{ lvl: number; vendors: number }[]>([]);
   const [level, setLevel] = useState<number>(1);
   const [lvMarkup, setLvMarkup] = useState("10");
+  const [items, setItems] = useState<any[]>([]);
+  const [itemInputs, setItemInputs] = useState<Record<string, string>>({});
+  const [itemMode, setItemMode] = useState<"price" | "add">("price");
+  const [showItems, setShowItems] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -38,6 +42,10 @@ export default function AdminVendorPricesPage() {
       const lv = await supabase.rpc("admin_level_counts");
       if (!lv.error && lv.data) {
         setLevels(lv.data as { lvl: number; vendors: number }[]);
+      }
+      const il = await supabase.rpc("admin_item_list");
+      if (!il.error && il.data) {
+        setItems(il.data as any[]);
       }
     })();
   }, [supabase]);
@@ -161,6 +169,54 @@ export default function AdminVendorPricesPage() {
     });
   }
 
+  async function applyItemPrices() {
+    const count = levels.find((x) => x.lvl === level)?.vendors ?? 0;
+    if (count === 0) {
+      setMsg({ ok: false, text: "There are no vendors at Level " + level + "." });
+      return;
+    }
+    const payload: { kind: string; id: string; value: number }[] = [];
+    for (const it of items) {
+      const raw = (itemInputs[it.kind + it.item_id] || "").trim();
+      if (raw === "") continue;
+      const value = Number(raw);
+      if (!isFinite(value) || value < 0 || (itemMode === "price" && value === 0)) {
+        setMsg({
+          ok: false,
+          text: "Check the amount for " + it.product_name + (it.variant_name ? " — " + it.variant_name : "") + ".",
+        });
+        return;
+      }
+      payload.push({ kind: it.kind, id: it.item_id, value });
+    }
+    if (payload.length === 0) {
+      setMsg({ ok: false, text: "Type a price next to at least one item." });
+      return;
+    }
+    const ask =
+      "Apply " + payload.length + " item price(s) to all " + count + " Level " + level +
+      " vendor(s)? This replaces their current price for those items.";
+    if (!window.confirm(ask)) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc("admin_set_level_item_prices", {
+      p_level: level,
+      p_items: payload,
+      p_mode: itemMode,
+    });
+    setBusy(false);
+    if (error) {
+      setMsg({ ok: false, text: error.message });
+      return;
+    }
+    const d: any = data || {};
+    setMsg({
+      ok: true,
+      text:
+        "Level " + level + " done. Vendors: " + d.vendors + ", prices set: " + d.set +
+        ", skipped: " + d.failed + ". (Skipped = below that vendor's cost, or above what their sub-vendors charge.)",
+    });
+  }
+
   const q = search.trim().toLowerCase();
   const shown = vendors
     .filter((v) => {
@@ -246,6 +302,82 @@ export default function AdminVendorPricesPage() {
                   >
                     Replace all – Level {level}
                   </button>
+                </div>
+                <div className="mt-4 border-t border-line pt-4">
+                  <button
+                    onClick={() => setShowItems(!showItems)}
+                    className="text-sm font-semibold text-indigo"
+                  >
+                    {showItems ? "▾" : "▸"} Set each item's price for Level {level}
+                  </button>
+                  {showItems && (
+                    <div className="mt-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setItemMode("price")}
+                          className={`rounded-pill px-3 py-1.5 text-xs ${
+                            itemMode === "price"
+                              ? "bg-indigo font-bold text-white"
+                              : "border border-line"
+                          }`}
+                        >
+                          Exact price
+                        </button>
+                        <button
+                          onClick={() => setItemMode("add")}
+                          className={`rounded-pill px-3 py-1.5 text-xs ${
+                            itemMode === "add"
+                              ? "bg-indigo font-bold text-white"
+                              : "border border-line"
+                          }`}
+                        >
+                          Add GH₵ to their cost
+                        </button>
+                      </div>
+                      <p className="mt-2 text-xs text-ink/60">
+                        {itemMode === "price"
+                          ? "Type the selling price every Level " + level + " vendor will get. Leave an item empty to skip it."
+                          : "Type the GH₵ amount to add on top of each vendor's own cost. Leave an item empty to skip it."}
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {items.map((it) => (
+                          <div key={it.kind + it.item_id} className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-medium">
+                                {it.product_name}
+                                {it.variant_name ? " — " + it.variant_name : ""}
+                              </div>
+                              <div className="text-xs text-ink/50">
+                                Admin price GH₵ {Number(it.base_price).toFixed(2)}
+                              </div>
+                            </div>
+                            <input
+                              value={itemInputs[it.kind + it.item_id] ?? ""}
+                              onChange={(e) =>
+                                setItemInputs({
+                                  ...itemInputs,
+                                  [it.kind + it.item_id]: e.target.value,
+                                })
+                              }
+                              inputMode="decimal"
+                              placeholder={itemMode === "price" ? "Price" : "+ GH₵"}
+                              className="w-24 rounded-xl border border-line p-2 text-base"
+                            />
+                          </div>
+                        ))}
+                        {items.length === 0 && (
+                          <p className="text-xs text-ink/50">No active products.</p>
+                        )}
+                      </div>
+                      <button
+                        disabled={busy}
+                        onClick={applyItemPrices}
+                        className="mt-4 rounded-pill bg-gold px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        Apply to all Level {level} vendors
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}
