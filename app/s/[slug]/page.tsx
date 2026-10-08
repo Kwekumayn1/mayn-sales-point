@@ -68,7 +68,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
         const p = pv?.products;
         if (!pv || !p || p.is_active === false || pv.is_active === false) return;
         const price = Number(row.selling_price ?? row.price);
-        const existing = map.get(p.id) || {
+       const existing: Card = map.get(p.id) || {
           key: p.id,
           productId: p.id,
           name: p.name,
