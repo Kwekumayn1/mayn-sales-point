@@ -555,3 +555,5 @@ export default function AdminProductsPage() {
                       onClick={() => handleAddVariant(p.id)}
                       disabled={variantBusy}
                       className="rounded-pill bg-indigo px-4 py-2 text-xs font-medium text-white hover:bg-indigo-l
+
+                    
