@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Variant = { id: string; name: string; price: number; vendorPriceId?: string };
+type Variant = { id: string; name: string; price: number };
 type Card = {
   key: string;
   productId: string;
@@ -14,40 +14,64 @@ type Card = {
   variants: Variant[];
 };
 
+function pick(obj: any, keys: string[]): any {
+  for (const k of keys) {
+    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
+  }
+  return undefined;
+}
+
+const PRICE_KEYS = ["selling_price", "price", "vendor_price", "custom_price", "sell_price"];
+
 export default function StorefrontPage({ params }: { params: { slug: string } }) {
   const [vendor, setVendor] = useState<any>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [debug, setDebug] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [variantId, setVariantId] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const supabase = createClient();
     (async () => {
-      const { data: v } = await supabase
-        .from("storefronts")
-        .select("*")
-        .eq("slug", params.slug)
-        .maybeSingle();
+      let v: any = null;
+      let lastError = "";
+      for (const col of ["slug", "store_slug", "username", "handle"]) {
+        const res = await supabase
+          .from("storefronts")
+          .select("*")
+          .eq(col, params.slug)
+          .limit(1);
+        if (res.error) {
+          lastError = col + ": " + res.error.message;
+          continue;
+        }
+        if (res.data && res.data.length > 0) {
+          v = res.data[0];
+          break;
+        }
+      }
       if (!v) {
+        setDebug(lastError);
         setNotFound(true);
         setLoading(false);
         return;
       }
       setVendor(v);
-      const vendorId = (v as any).vendor_id ?? (v as any).id;
+      const vendorId = pick(v, ["vendor_id", "user_id", "profile_id", "id"]);
 
       const map = new Map<string, Card>();
 
-      const { data: vp } = await supabase
+      const { data: vp, error: vpErr } = await supabase
         .from("vendor_prices")
         .select("*, products(*)")
         .eq("vendor_id", vendorId);
+      if (vpErr) setDebug("prices: " + vpErr.message);
       (vp || []).forEach((row: any) => {
         const p = row.products;
         if (!p || p.is_active === false) return;
-        const price = Number(row.selling_price ?? row.price);
+        const price = Number(pick(row, PRICE_KEYS));
         map.set(p.id, {
           key: p.id,
           productId: p.id,
@@ -59,16 +83,17 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
         });
       });
 
-      const { data: vv } = await supabase
+      const { data: vv, error: vvErr } = await supabase
         .from("vendor_variant_prices")
         .select("*, product_variants(*, products(*))")
         .eq("vendor_id", vendorId);
+      if (vvErr) setDebug((d) => d + " variants: " + vvErr.message);
       (vv || []).forEach((row: any) => {
         const pv = row.product_variants;
         const p = pv?.products;
         if (!pv || !p || p.is_active === false || pv.is_active === false) return;
-        const price = Number(row.selling_price ?? row.price);
-       const existing: Card = map.get(p.id) || {
+        const price = Number(pick(row, PRICE_KEYS));
+        const existing: Card = map.get(p.id) || {
           key: p.id,
           productId: p.id,
           name: p.name,
@@ -77,7 +102,11 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
           directPrice: null,
           variants: [],
         };
-        existing.variants.push({ id: pv.id, name: pv.name ?? pv.label, price });
+        existing.variants.push({
+          id: pv.id,
+          name: pick(pv, ["name", "label", "title"]) ?? "Option",
+          price,
+        });
         map.set(p.id, existing);
       });
 
@@ -88,10 +117,15 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
 
   if (loading) return <main className="p-8 text-center text-indigo-light">Loading…</main>;
   if (notFound)
-    return <main className="p-8 text-center">This store was not found.</main>;
+    return (
+      <main className="p-8 text-center">
+        <div>This store was not found.</div>
+        {debug && <div className="mt-3 text-xs text-ink/50">{debug}</div>}
+      </main>
+    );
 
-  const vendorId = vendor.vendor_id ?? vendor.id;
-  const storeName = vendor.store_name ?? vendor.name ?? vendor.slug;
+  const vendorId = pick(vendor, ["vendor_id", "user_id", "profile_id", "id"]);
+  const storeName = pick(vendor, ["store_name", "name", "display_name", "slug"]);
   const open = cards.find((c) => c.key === openKey) || null;
 
   function selectedVariant(c: Card): Variant | undefined {
@@ -106,12 +140,14 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
       </header>
 
       {cards.length === 0 && (
-        <p className="py-10 text-center text-sm text-ink/60">No products available yet.</p>
+        <p className="py-10 text-center text-sm text-ink/60">
+          No products available yet.
+          {debug && <span className="mt-2 block text-xs">{debug}</span>}
+        </p>
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {cards.map((c) => {
-          const sel = c.variants.length ? selectedVariant(c) : undefined;
           const fromPrice = c.variants.length
             ? Math.min(...c.variants.map((x) => x.price))
             : c.directPrice;
@@ -135,10 +171,9 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
               <div className="p-2.5">
                 <div className="line-clamp-2 text-sm font-semibold leading-tight">{c.name}</div>
                 <div className="mt-1 text-sm font-bold text-indigo">
-                  {c.variants.length ? "From " : ""}GH₵ {fromPrice?.toFixed(2)}
+                  {c.variants.length ? "From " : ""}GH₵ {Number(fromPrice).toFixed(2)}
                 </div>
               </div>
-              {sel && null}
             </button>
           );
         })}
@@ -188,7 +223,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
                   href={href}
                   className="block rounded-pill bg-gold py-3 text-center text-base font-bold text-white shadow"
                 >
-                  Buy now · GH₵ {price?.toFixed(2)}
+                  Buy now · GH₵ {Number(price).toFixed(2)}
                 </a>
               );
             })()}
@@ -197,4 +232,4 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
       )}
     </main>
   );
-          }
+       }
