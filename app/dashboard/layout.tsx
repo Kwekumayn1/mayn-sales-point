@@ -20,6 +20,7 @@ const VENDOR_ITEMS: Item[] = [
 ];
 
 const ADMIN_ITEMS: Item[] = [
+  { href: "/dashboard/admin/vendors", label: "Create 1st vendor" },
   { href: "/dashboard/admin/products", label: "Manage products" },
   { href: "/dashboard/admin/categories", label: "Manage categories" },
   { href: "/dashboard/admin/orders", label: "Manage orders" },
@@ -165,4 +166,5 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="md:pl-72">{children}</div>
     </div>
   );
-  }
+                                                                              }
+    
