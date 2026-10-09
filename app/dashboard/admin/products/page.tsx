@@ -260,6 +260,102 @@ function AddProductForm(props: { categories: any[]; onDone: () => void }) {
   );
 }
 
+function SubItem(props: {
+  v: any;
+  onChanged: () => void;
+  onError: (m: string) => void;
+}) {
+  const v = props.v;
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(v.name);
+  const [price, setPrice] = useState(String(v.base_price));
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    props.onError("");
+    const num = Number(price);
+    if (name.trim() === "") {
+      props.onError("Name cannot be empty.");
+      return;
+    }
+    if (price.trim() === "" || isNaN(num) || num < 0) {
+      props.onError("Enter a valid price.");
+      return;
+    }
+    setBusy(true);
+    const supabase = createClient();
+    const res = await supabase
+      .from("product_variants")
+      .update({ name: name.trim(), base_price: num })
+      .eq("id", v.id);
+    setBusy(false);
+    if (res.error) {
+      props.onError(res.error.message);
+      return;
+    }
+    setEditing(false);
+    props.onChanged();
+  }
+
+  async function remove() {
+    if (!confirm("Delete this sub-product? Past orders stay in your records. This cannot be undone.")) {
+      return;
+    }
+    setBusy(true);
+    const supabase = createClient();
+    const res = await supabase.from("product_variants").delete().eq("id", v.id);
+    setBusy(false);
+    if (res.error) {
+      props.onError(res.error.message);
+      return;
+    }
+    props.onChanged();
+  }
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 border border-line bg-white px-3 py-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="min-w-0 flex-1 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+        />
+        <input
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          className="w-28 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+        />
+        <button onClick={save} disabled={busy} className="text-xs font-medium text-indigo">
+          Save
+        </button>
+        <button onClick={() => setEditing(false)} disabled={busy} className="text-xs text-ink/60">
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between border border-line bg-white px-3 py-2">
+      <span>
+        {v.name} - GH₵{Number(v.base_price).toFixed(2)}
+      </span>
+      <span className="flex gap-3">
+        <button onClick={() => setEditing(true)} disabled={busy} className="text-xs text-indigo">
+          Edit
+        </button>
+        <button onClick={remove} disabled={busy} className="text-xs text-red-600">
+          Delete
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function SubProducts(props: { product: any }) {
   const productId = props.product.id;
   const [items, setItems] = useState<any[]>([]);
@@ -267,9 +363,6 @@ function SubProducts(props: { product: any }) {
   const [newPrice, setNewPrice] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [editId, setEditId] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editPrice, setEditPrice] = useState("");
 
   async function loadItems() {
     const supabase = createClient();
@@ -316,54 +409,6 @@ function SubProducts(props: { product: any }) {
     await loadItems();
   }
 
-  function startEdit(v: any) {
-    setError("");
-    setEditId(v.id);
-    setEditName(v.name);
-    setEditPrice(String(v.base_price));
-  }
-
-  async function saveEdit() {
-    setError("");
-    const price = Number(editPrice);
-    if (editName.trim() === "") {
-      setError("Name cannot be empty.");
-      return;
-    }
-    if (editPrice.trim() === "" || isNaN(price) || price < 0) {
-      setError("Enter a valid price.");
-      return;
-    }
-    setBusy(true);
-    const supabase = createClient();
-    const res = await supabase
-      .from("product_variants")
-      .update({ name: editName.trim(), base_price: price })
-      .eq("id", editId);
-    setBusy(false);
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
-    setEditId("");
-    await loadItems();
-  }
-
-  async function removeItem(id: string) {
-    if (!confirm("Delete this sub-product? Past orders stay in your records. This cannot be undone.")) {
-      return;
-    }
-    setBusy(true);
-    const supabase = createClient();
-    const res = await supabase.from("product_variants").delete().eq("id", id);
-    setBusy(false);
-    if (res.error) {
-      setError(res.error.message);
-      return;
-    }
-    await loadItems();
-  }
-
   return (
     <div className="mt-3 border border-line bg-paper p-4">
       <p className="text-xs uppercase tracking-wide text-ink/50">
@@ -378,68 +423,9 @@ function SubProducts(props: { product: any }) {
         {items.length === 0 ? (
           <p className="text-xs text-ink/50">No sub-products yet.</p>
         ) : null}
-        {items.map((v) =>
-          editId === v.id ? (
-            <div
-              key={v.id}
-              className="flex flex-wrap items-center gap-2 border border-line bg-white px-3 py-2"
-            >
-              <input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="min-w-0 flex-1 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-              />
-              <input
-                value={editPrice}
-                onChange={(e) => setEditPrice(e.target.value)}
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                className="w-28 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-              />
-              <button
-                onClick={saveEdit}
-                disabled={busy}
-                className="text-xs font-medium text-indigo disabled:opacity-60"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setEditId("")}
-                disabled={busy}
-                className="text-xs text-ink/60"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div
-              key={v.id}
-              className="flex items-center justify-between border border-line bg-white px-3 py-2"
-            >
-              <span>
-                {v.name} - GH₵{Number(v.base_price).toFixed(2)}
-              </span>
-              <span className="flex gap-3">
-                <button
-                  onClick={() => startEdit(v)}
-                  disabled={busy}
-                  className="text-xs text-indigo disabled:opacity-60"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => removeItem(v.id)}
-                  disabled={busy}
-                  className="text-xs text-red-600 disabled:opacity-60"
-                >
-                  Delete
-                </button>
-              </span>
-            </div>
-          )
-        )}
+        {items.map((v) => (
+          <SubItem key={v.id + "|" + v.name + "|" + v.base_price} v={v} onChanged={loadItems} onError={setError} />
+        ))}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -620,4 +606,11 @@ export default function AdminProductsPage() {
         ) : null}
         <div className="mt-4 divide-y divide-line border-t border-line">
           {products.map((p) => (
-            <Prod
+            <ProductRow key={p.id} product={p} onChanged={load} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+    }
+      
