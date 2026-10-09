@@ -112,7 +112,12 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
         map.set(p.id, existing);
       });
 
-      setCards(Array.from(map.values()));
+      const list = Array.from(map.values());
+      list.forEach((c) => c.variants.sort((a, b) => a.price - b.price));
+      const startPrice = (c: Card) =>
+        c.variants.length ? c.variants[0].price : Number(c.directPrice) || 0;
+      list.sort((a, b) => startPrice(a) - startPrice(b) || a.name.localeCompare(b.name));
+      setCards(list);
       setLoading(false);
     })();
   }, [params.slug]);
@@ -235,3 +240,4 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
     </main>
   );
     }
+                                                                       
