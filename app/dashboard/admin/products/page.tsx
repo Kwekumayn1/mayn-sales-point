@@ -16,6 +16,7 @@ export default function AdminProductsPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [sku, setSku] = useState("");
   const [basePrice, setBasePrice] = useState("");
   const [productType, setProductType] = useState("digital");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -67,7 +68,9 @@ export default function AdminProductsPage() {
 
     const { data: prods } = await supabase
       .from("products")
-      .select("id, name, base_price, product_type, is_active, image_url, product_categories(name)")
+      .select(
+        "id, name, base_price, product_type, is_active, sku, image_url, product_categories(name)"
+      )
       .order("created_at", { ascending: false });
     setProducts(prods ?? []);
 
@@ -78,7 +81,7 @@ export default function AdminProductsPage() {
     e.preventDefault();
     setFormError(null);
 
-    const price = basePrice.trim() === "" ? 0 : Number(basePrice);
+    const price = Number(basePrice);
     if (Number.isNaN(price) || price < 0) {
       setFormError("Enter a valid price.");
       return;
@@ -115,6 +118,7 @@ export default function AdminProductsPage() {
         name,
         description,
         category_id: categoryId || null,
+        sku: sku || null,
         base_price: price,
         product_type: productType,
         is_active: true,
@@ -154,6 +158,7 @@ export default function AdminProductsPage() {
 
     setName("");
     setDescription("");
+    setSku("");
     setBasePrice("");
     setImageFile(null);
     setCustomFields([]);
@@ -170,18 +175,17 @@ export default function AdminProductsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (
-      !confirm(
-        "Delete this product and all its sub-products? Past orders stay in your records. This cannot be undone."
-      )
-    )
-      return;
+    if (!confirm("Delete this product? This cannot be undone.")) return;
     setActionId(id);
     const supabase = createClient();
     const { error } = await supabase.from("products").delete().eq("id", id);
     setActionId(null);
     if (error) {
-      alert(error.message);
+      alert(
+        error.message.toLowerCase().includes("foreign key")
+          ? "Can't delete — this product already has orders. Set it to Inactive instead."
+          : error.message
+      );
       return;
     }
     void load();
@@ -218,7 +222,7 @@ export default function AdminProductsPage() {
       setVariantError("Enter a name for this sub-product.");
       return;
     }
-    if (newVariantPrice.trim() === "" || Number.isNaN(price) || price < 0) {
+    if (Number.isNaN(price) || price < 0) {
       setVariantError("Enter a valid price.");
       return;
     }
@@ -246,14 +250,17 @@ export default function AdminProductsPage() {
   }
 
   async function handleDeleteVariant(variantId: string, productId: string) {
-    if (!confirm("Delete this sub-product? Past orders stay in your records. This cannot be undone."))
-      return;
+    if (!confirm("Delete this sub-product? This cannot be undone.")) return;
     setVariantBusy(true);
     const supabase = createClient();
     const { error } = await supabase.from("product_variants").delete().eq("id", variantId);
     setVariantBusy(false);
     if (error) {
-      setVariantError(error.message);
+      setVariantError(
+        error.message.toLowerCase().includes("foreign key")
+          ? "Can't delete — this sub-product already has orders."
+          : error.message
+      );
       return;
     }
     await loadVariants(productId);
@@ -318,6 +325,32 @@ export default function AdminProductsPage() {
               </select>
             </div>
             <div>
+              <label className="text-sm font-medium">SKU / product code</label>
+              <input
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-sm font-medium">Base price (GH₵)</label>
+              <input
+                required
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                value={basePrice}
+                onChange={(e) => setBasePrice(e.target.value)}
+                className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+              />
+              <p className="mt-1 text-xs text-ink/50">
+                Used if this product has no sub-products. Ignored otherwise.
+              </p>
+            </div>
+            <div>
               <label className="text-sm font-medium">Type</label>
               <select
                 value={productType}
@@ -329,21 +362,6 @@ export default function AdminProductsPage() {
                 <option value="service">Service</option>
               </select>
             </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium">Base price (GH₵) (optional)</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={basePrice}
-              onChange={(e) => setBasePrice(e.target.value)}
-              className="mt-1 w-full border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-            />
-            <p className="mt-1 text-xs text-ink/50">
-              Leave empty if you will add sub-products below.
-            </p>
           </div>
 
           <div>
@@ -463,17 +481,13 @@ export default function AdminProductsPage() {
                   <div>
                     <p className="font-medium">{p.name}</p>
                     <p className="text-ink/50">
-                      {p.product_categories?.name ?? "Uncategorized"}
+                      {p.product_categories?.name ?? "Uncategorized"} · {p.sku || "no SKU"}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <p className="font-medium">
-                      {Number(p.base_price) > 0
-                        ? "GH₵" + Number(p.base_price).toFixed(2)
-                        : "Sub-products only"}
-                    </p>
+                    <p className="font-medium">GH₵{Number(p.base_price).toFixed(2)}</p>
                     <p className={p.is_active ? "text-leaf" : "text-ink/40"}>
                       {p.is_active ? "Active" : "Inactive"}
                     </p>
@@ -543,17 +557,4 @@ export default function AdminProductsPage() {
                     />
                     <input
                       value={newVariantPrice}
-                      onChange={(e) => setNewVariantPrice(e.target.value)}
-                      placeholder="Price (GH₵)"
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      className="w-32 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
-                    />
-                    <button
-                      onClick={() => handleAddVariant(p.id)}
-                      disabled={variantBusy}
-                      className="rounded-pill bg-indigo px-4 py-2 text-xs font-medium text-white hover:bg-indigo-l
-
-                    
+                      onChange={(e) => setNewVariantPrice(e.target.val
