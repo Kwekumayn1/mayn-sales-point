@@ -21,6 +21,7 @@ const VENDOR_ITEMS: Item[] = [
 
 const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/vendors", label: "Create 1st vendor" },
+  { href: "/dashboard/admin/community", label: "Community link" },
   { href: "/dashboard/admin/products", label: "Manage products" },
   { href: "/dashboard/admin/categories", label: "Manage categories" },
   { href: "/dashboard/admin/orders", label: "Manage orders" },
@@ -37,6 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [name, setName] = useState("");
   const [level, setLevel] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
+  const [waLink, setWaLink] = useState("");
 
   useEffect(() => {
     setOpen(false);
@@ -60,6 +62,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
       const { data: lvl } = await supabase.rpc("my_vendor_level");
       setLevel(typeof lvl === "number" ? lvl : null);
+      const { data: wl } = await supabase.rpc("get_community_link");
+      setWaLink(typeof wl === "string" ? wl : "");
       setReady(true);
     })();
   }, []);
@@ -164,7 +168,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="md:pl-72">{children}</div>
+
+      {waLink && (
+        <a
+          href={waLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Join our WhatsApp community"
+          className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg active:scale-95"
+        >
+          <svg viewBox="0 0 32 32" width="30" height="30" fill="currentColor" aria-hidden="true">
+            <path d="M16.04 3C9.4 3 4.02 8.37 4.02 15c0 2.12.56 4.19 1.61 6.01L4 29l8.19-1.6A12 12 0 0 0 16.04 27C22.68 27 28 21.63 28 15S22.68 3 16.04 3zm0 21.9c-1.8 0-3.57-.48-5.11-1.4l-.37-.22-4.86.95.99-4.73-.24-.39A9.9 9.9 0 0 1 6.1 15c0-5.46 4.46-9.9 9.94-9.9 5.47 0 9.93 4.44 9.93 9.9s-4.46 9.9-9.93 9.9zm5.44-7.41c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.47-.89-.79-1.49-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.61-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.08 1.77-.72 2.02-1.42.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z" />
+          </svg>
+        </a>
+      )}
     </div>
   );
-                                                                              }
-    
+  }
