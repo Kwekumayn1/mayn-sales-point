@@ -3,13 +3,41 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Row = { order_id: string; phone: string; item: string };
-type Cat = { id: string; name: string };
+function cleanNumber(raw: any): string {
+  let d = String(raw || "").replace(/[^0-9]/g, "");
+  if (d.length === 12 && d.startsWith("233")) d = "0" + d.slice(3);
+  if (d.length === 9) d = "0" + d;
+  return d;
+}
+
+function readGb(item: any): any {
+  const m = String(item || "").match(/(\d+(?:\.\d+)?)\s*(tb|gb|mb)/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  const u = m[2].toLowerCase();
+  if (u === "tb") return n * 1000;
+  if (u === "mb") return n / 1000;
+  return n;
+}
+
+function sheetName(name: string, used: any): string {
+  let base = String(name || "Orders").replace(/[\[\]:*?\/\\]/g, " ").trim();
+  if (base === "") base = "Orders";
+  base = base.slice(0, 28);
+  let out = base;
+  let i = 2;
+  while (used[out]) {
+    out = base + " " + i;
+    i = i + 1;
+  }
+  used[out] = true;
+  return out;
+}
 
 export default function ExportOrdersPage() {
-  const [cats, setCats] = useState<Cat[]>([]);
+  const [cats, setCats] = useState<any>([]);
   const [cat, setCat] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<any>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -22,7 +50,7 @@ export default function ExportOrdersPage() {
         .from("product_categories")
         .select("id, name")
         .order("name", { ascending: true });
-      setCats((data as Cat[]) || []);
+      setCats(data || []);
     })();
   }, []);
 
@@ -39,7 +67,7 @@ export default function ExportOrdersPage() {
       setErr(error.message);
       return;
     }
-    setRows((data as Row[]) || []);
+    setRows(data || []);
     setLoaded(true);
   }
 
@@ -50,18 +78,35 @@ export default function ExportOrdersPage() {
     setErr("");
     setMsg("");
     try {
-      const XLSX = await import("xlsx");
-      const heading = "Number : data size";
-      const aoa: string[][] = [[heading]];
-      rows.forEach((r) => aoa.push([r.phone + " : " + r.item]));
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws["!cols"] = [{ wch: 34 }];
+      const XLSX: any = await import("xlsx");
+      const groups: any = {};
+      const order: any = [];
+      rows.forEach((r: any) => {
+        const key = r.product || "Orders";
+        if (!groups[key]) {
+          groups[key] = [];
+          order.push(key);
+        }
+        groups[key].push(r);
+      });
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Orders");
+      const used: any = {};
+      order.forEach((key: string) => {
+        const list = groups[key];
+        const allGb = list.every((r: any) => readGb(r.item) !== null);
+        const aoa: any = [["NUMBER", allGb ? "DATA(GB)" : "ITEM"]];
+        list.forEach((r: any) => {
+          const gb = readGb(r.item);
+          aoa.push([cleanNumber(r.phone), allGb ? gb : String(r.item || "")]);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws["!cols"] = [{ wch: 16 }, { wch: 22 }];
+        XLSX.utils.book_append_sheet(wb, ws, sheetName(key, used));
+      });
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
-      XLSX.writeFile(wb, "orders-" + stamp + ".xlsx");
+      XLSX.writeFile(wb, "agent_orders-" + stamp + ".xlsx");
 
-      const ids = rows.map((r) => r.order_id);
+      const ids = rows.map((r: any) => r.order_id);
       const { data, error } = await supabase.rpc("admin_mark_orders_processed", {
         p_ids: ids,
       });
@@ -81,15 +126,16 @@ export default function ExportOrdersPage() {
     <main className="mx-auto max-w-2xl space-y-4 p-4">
       <h1 className="text-xl font-bold">Export orders</h1>
       <p className="text-sm">
-        Only orders paid successfully and not exported before are included. After
-        export they are marked as processed.
+        Only orders paid successfully and not exported before are included. Each
+        product gets its own sheet with NUMBER and DATA(GB). After export the orders
+        are marked as processed.
       </p>
 
       <div className="space-y-2 rounded-xl border p-4">
         <label className="block text-sm font-semibold">Product category</label>
         <select
           value={cat}
-          onChange={(e) => {
+          onChange={(e: any) => {
             setCat(e.target.value);
             setLoaded(false);
             setRows([]);
@@ -97,7 +143,7 @@ export default function ExportOrdersPage() {
           className="w-full rounded-lg border p-2"
         >
           <option value="">All categories</option>
-          {cats.map((c) => (
+          {cats.map((c: any) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -122,9 +168,9 @@ export default function ExportOrdersPage() {
           </div>
           {rows.length > 0 && (
             <div className="max-h-64 overflow-y-auto rounded-lg bg-gray-50 p-2 text-sm">
-              {rows.map((r) => (
+              {rows.map((r: any) => (
                 <div key={r.order_id}>
-                  {r.phone} : {r.item}
+                  {r.product} | {cleanNumber(r.phone)} | {r.item}
                 </div>
               ))}
             </div>
@@ -140,4 +186,6 @@ export default function ExportOrdersPage() {
       )}
     </main>
   );
-    }
+}
+
+// END OF FILE
