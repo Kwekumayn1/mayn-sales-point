@@ -30,6 +30,37 @@ export default function AdminVendorPricesPage() {
   const [itemInputs, setItemInputs] = useState<Record<string, string>>({});
   const [itemMode, setItemMode] = useState<"price" | "add">("price");
   const [showItems, setShowItems] = useState(false);
+  const [tpl, setTpl] = useState<{ markup_pct: number | null; items: any[] }>({
+    markup_pct: null,
+    items: [],
+  });
+
+  async function loadTemplate(lvl: number) {
+    const { data, error } = await supabase.rpc("admin_level_template", { p_level: lvl });
+    if (!error && data) {
+      setTpl(data as { markup_pct: number | null; items: any[] });
+    } else {
+      setTpl({ markup_pct: null, items: [] });
+    }
+  }
+
+  useEffect(() => {
+    loadTemplate(level);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
+
+  function newVendorText(it: any): string {
+    const t = tpl.items.find((x: any) => x.kind === it.kind && x.item_id === it.item_id);
+    if (t) {
+      return t.mode === "price"
+        ? "New vendors get GH₵ " + Number(t.value).toFixed(2)
+        : "New vendors get their cost + GH₵ " + Number(t.value).toFixed(2);
+    }
+    if (tpl.markup_pct !== null && tpl.markup_pct !== undefined) {
+      return "New vendors get their cost + " + Number(tpl.markup_pct) + "%";
+    }
+    return "New vendors: not set yet";
+  }
 
   useEffect(() => {
     (async () => {
@@ -161,11 +192,20 @@ export default function AdminVendorPricesPage() {
       return;
     }
     const d: any = data || {};
+    const sv = await supabase.rpc("admin_save_level_markup", {
+      p_level: level,
+      p_markup_pct: pct,
+      p_overwrite: overwrite,
+    });
+    loadTemplate(level);
     setMsg({
-      ok: true,
+      ok: !sv.error,
       text:
         "Level " + level + " done. Vendors: " + d.vendors + ", prices set: " + d.set +
-        ", kept: " + d.kept + ", skipped: " + d.failed + ".",
+        ", kept: " + d.kept + ", skipped: " + d.failed + "." +
+        (sv.error
+          ? " But saving it for future vendors failed: " + sv.error.message
+          : " New Level " + level + " vendors will get this too."),
     });
   }
 
@@ -209,11 +249,20 @@ export default function AdminVendorPricesPage() {
       return;
     }
     const d: any = data || {};
+    const sv = await supabase.rpc("admin_save_level_items", {
+      p_level: level,
+      p_items: payload,
+      p_mode: itemMode,
+    });
+    loadTemplate(level);
     setMsg({
-      ok: true,
+      ok: !sv.error,
       text:
         "Level " + level + " done. Vendors: " + d.vendors + ", prices set: " + d.set +
-        ", skipped: " + d.failed + ". (Skipped = below that vendor's cost, or above what their sub-vendors charge.)",
+        ", skipped: " + d.failed + ". (Skipped = below that vendor's cost, or above what their sub-vendors charge.)" +
+        (sv.error
+          ? " But saving it for future vendors failed: " + sv.error.message
+          : " New Level " + level + " vendors will get these prices too."),
     });
   }
 
@@ -350,6 +399,9 @@ export default function AdminVendorPricesPage() {
                               <div className="text-xs text-ink/50">
                                 Admin price GH₵ {Number(it.base_price).toFixed(2)}
                               </div>
+                              <div className="text-xs text-indigo-light">
+                                {newVendorText(it)}
+                              </div>
                             </div>
                             <input
                               value={itemInputs[it.kind + it.item_id] ?? ""}
@@ -472,33 +524,4 @@ export default function AdminVendorPricesPage() {
                   {r.variant_name ? " — " + r.variant_name : ""}
                 </div>
                 <div className="mt-0.5 text-xs text-ink/60">
-                  Their cost: GH₵ {Number(r.buying_price).toFixed(2)}
-                  {r.current_price === null ? " · not priced yet" : ""}
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    value={inputs[r.item_id] ?? ""}
-                    onChange={(e) => setInputs({ ...inputs, [r.item_id]: e.target.value })}
-                    inputMode="decimal"
-                    placeholder="Price"
-                    className="w-full rounded-xl border border-line p-2 text-base"
-                  />
-                  <button
-                    disabled={busy}
-                    onClick={() => saveRow(r)}
-                    className="rounded-pill bg-indigo px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            ))}
-            {rows.length === 0 && !busy && (
-              <p className="py-6 text-center text-sm text-ink/50">No active products.</p>
-            )}
-          </div>
-        </section>
-      )}
-    </main>
-  );
-    }
+                  Their cost: GH
