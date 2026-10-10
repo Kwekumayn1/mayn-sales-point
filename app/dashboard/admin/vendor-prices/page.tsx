@@ -53,8 +53,8 @@ export default function AdminVendorPricesPage() {
     const t = tpl.items.find((x: any) => x.kind === it.kind && x.item_id === it.item_id);
     if (t) {
       return t.mode === "price"
-        ? "New vendors get GH₵ " + Number(t.value).toFixed(2)
-        : "New vendors get their cost + GH₵ " + Number(t.value).toFixed(2);
+        ? "New vendors get GH\u20B5 " + Number(t.value).toFixed(2)
+        : "New vendors get their cost + GH\u20B5 " + Number(t.value).toFixed(2);
     }
     if (tpl.markup_pct !== null && tpl.markup_pct !== undefined) {
       return "New vendors get their cost + " + Number(tpl.markup_pct) + "%";
@@ -223,7 +223,7 @@ export default function AdminVendorPricesPage() {
       if (!isFinite(value) || value < 0 || (itemMode === "price" && value === 0)) {
         setMsg({
           ok: false,
-          text: "Check the amount for " + it.product_name + (it.variant_name ? " — " + it.variant_name : "") + ".",
+          text: "Check the amount for " + it.product_name + (it.variant_name ? " \u2014 " + it.variant_name : "") + ".",
         });
         return;
       }
@@ -281,7 +281,7 @@ export default function AdminVendorPricesPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16 pt-6">
       <a href="/dashboard" className="text-sm text-indigo-light">
-        ← Dashboard
+        &larr; Dashboard
       </a>
       <h1 className="mt-2 text-2xl text-indigo">Set prices for vendors</h1>
       <p className="mt-1 text-sm text-ink/60">
@@ -323,7 +323,7 @@ export default function AdminVendorPricesPage() {
                           : "border border-line bg-white"
                       }`}
                     >
-                      Level {x.lvl} · {x.vendors}
+                      Level {x.lvl} &middot; {x.vendors}
                     </button>
                   ))}
                 </div>
@@ -342,14 +342,14 @@ export default function AdminVendorPricesPage() {
                     onClick={() => levelFill(false)}
                     className="rounded-pill bg-gold px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                   >
-                    Fill unpriced – Level {level}
+                    Fill unpriced &ndash; Level {level}
                   </button>
                   <button
                     disabled={busy}
                     onClick={() => levelFill(true)}
                     className="rounded-pill border border-line px-4 py-2 text-sm disabled:opacity-50"
                   >
-                    Replace all – Level {level}
+                    Replace all &ndash; Level {level}
                   </button>
                 </div>
                 <div className="mt-4 border-t border-line pt-4">
@@ -357,7 +357,7 @@ export default function AdminVendorPricesPage() {
                     onClick={() => setShowItems(!showItems)}
                     className="text-sm font-semibold text-indigo"
                   >
-                    {showItems ? "▾" : "▸"} Set each item's price for Level {level}
+                    {showItems ? "\u25BE" : "\u25B8"} Set each item's price for Level {level}
                   </button>
                   {showItems && (
                     <div className="mt-3">
@@ -380,13 +380,13 @@ export default function AdminVendorPricesPage() {
                               : "border border-line"
                           }`}
                         >
-                          Add GH₵ to their cost
+                          Add GH&#8373; to their cost
                         </button>
                       </div>
                       <p className="mt-2 text-xs text-ink/60">
                         {itemMode === "price"
                           ? "Type the selling price every Level " + level + " vendor will get. Leave an item empty to skip it."
-                          : "Type the GH₵ amount to add on top of each vendor's own cost. Leave an item empty to skip it."}
+                          : "Type the GH\u20B5 amount to add on top of each vendor's own cost. Leave an item empty to skip it."}
                       </p>
                       <div className="mt-3 space-y-2">
                         {items.map((it) => (
@@ -394,10 +394,10 @@ export default function AdminVendorPricesPage() {
                             <div className="min-w-0 flex-1">
                               <div className="truncate text-sm font-medium">
                                 {it.product_name}
-                                {it.variant_name ? " — " + it.variant_name : ""}
+                                {it.variant_name ? " \u2014 " + it.variant_name : ""}
                               </div>
                               <div className="text-xs text-ink/50">
-                                Admin price GH₵ {Number(it.base_price).toFixed(2)}
+                                Admin price GH&#8373; {Number(it.base_price).toFixed(2)}
                               </div>
                               <div className="text-xs text-indigo-light">
                                 {newVendorText(it)}
@@ -412,7 +412,7 @@ export default function AdminVendorPricesPage() {
                                 })
                               }
                               inputMode="decimal"
-                              placeholder={itemMode === "price" ? "Price" : "+ GH₵"}
+                              placeholder={itemMode === "price" ? "Price" : "+ GH\u20B5"}
                               className="w-24 rounded-xl border border-line p-2 text-base"
                             />
                           </div>
@@ -450,8 +450,8 @@ export default function AdminVendorPricesPage() {
               >
                 <div className="font-semibold">{v.full_name || "(no name)"}</div>
                 <div className="text-xs text-ink/60">
-                  {v.vendor_code || "no ID"} · {v.role}
-                  {v.parent_name ? " · under " + v.parent_name : " · direct"}
+                  {v.vendor_code || "no ID"} &middot; {v.role}
+                  {v.parent_name ? " \u00B7 under " + v.parent_name : " \u00B7 direct"}
                 </div>
               </button>
             ))}
@@ -469,7 +469,7 @@ export default function AdminVendorPricesPage() {
               <div className="font-bold">{selected.full_name || "(no name)"}</div>
               <div className="text-xs text-white/80">
                 {selected.vendor_code || "no ID"}
-                {selected.parent_name ? " · under " + selected.parent_name : " · direct"}
+                {selected.parent_name ? " \u00B7 under " + selected.parent_name : " \u00B7 direct"}
               </div>
             </div>
             <button
@@ -521,7 +521,5 @@ export default function AdminVendorPricesPage() {
               <div key={r.kind + r.item_id} className="rounded-xl border border-line bg-white p-3">
                 <div className="font-semibold">
                   {r.product_name}
-                  {r.variant_name ? " — " + r.variant_name : ""}
-                </div>
-                <div className="mt-0.5 text-xs text-ink/60">
-                  Their cost: G
+                  {r.variant_name ? " \u2014 " + r.variant_name : ""}
+        
