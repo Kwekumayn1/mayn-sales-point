@@ -24,7 +24,7 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/community", label: "Community link" },
   { href: "/dashboard/admin/products", label: "Manage products" },
   { href: "/dashboard/admin/categories", label: "Manage categories" },
-  { href: "/dashboard/admin/orders", label: "Manage orders" },
+  { href: "/dashboard/admin/export", label: "Export orders" },
   { href: "/dashboard/admin/vendor-prices", label: "Set vendor prices" },
   { href: "/dashboard/admin/wallets", label: "Wallet top-ups" },
   { href: "/dashboard/admin/withdrawals", label: "Withdrawals" },
