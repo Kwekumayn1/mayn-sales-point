@@ -10,13 +10,16 @@ export default function SignupPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [refCode, setRefCode] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setRefCode(params.get("ref"));
+    const r = params.get("ref");
+    setRefCode(r && r.trim() !== "" ? r.trim() : null);
+    setReady(true);
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -46,6 +49,29 @@ export default function SignupPage() {
     setDone(true);
   }
 
+  if (!ready) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
+        <p className="text-sm text-ink/60">Loading…</p>
+      </main>
+    );
+  }
+
+  if (!refCode) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
+        <h1 className="font-display text-2xl text-indigo">Registration is by invitation only</h1>
+        <p className="mt-3 text-sm text-ink/70">
+          New accounts can only be created through a vendor's invitation link.
+          If you already have an account, please log in.
+        </p>
+        <Link href="/login" className="mt-6 text-sm font-medium text-indigo underline">
+          Go to login
+        </Link>
+      </main>
+    );
+  }
+
   if (done) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
@@ -65,14 +91,9 @@ export default function SignupPage() {
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
       <Link href="/login" className="font-display text-lg text-indigo">Mayn Sales Point</Link>
       <h1 className="mt-8 font-display text-2xl text-indigo">Create your account</h1>
-      <p className="mt-2 text-sm text-ink/60">
-        Every account can become a vendor later — no separate application needed.
+      <p className="mt-2 text-xs text-leaf">
+        You're joining on the invitation of vendor {refCode}.
       </p>
-      {refCode && (
-        <p className="mt-2 text-xs text-leaf">
-          You're joining as a referral of vendor {refCode}.
-        </p>
-      )}
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         <div>
@@ -134,4 +155,4 @@ export default function SignupPage() {
       </p>
     </main>
   );
-}
+      }
