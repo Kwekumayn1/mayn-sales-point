@@ -524,4 +524,4 @@ export default function AdminVendorPricesPage() {
                   {r.variant_name ? " — " + r.variant_name : ""}
                 </div>
                 <div className="mt-0.5 text-xs text-ink/60">
-                  Their cost: GH
+                  Their cost: G
