@@ -42,6 +42,7 @@ export default function ExportOrdersPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [lastFile, setLastFile] = useState<any>(null);
 
   useEffect(() => {
     const supabase: any = createClient();
@@ -69,6 +70,17 @@ export default function ExportOrdersPage() {
     }
     setRows(data || []);
     setLoaded(true);
+  }
+
+  function saveBlob(blob: any, name: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   async function exportNow() {
@@ -104,18 +116,26 @@ export default function ExportOrdersPage() {
         XLSX.utils.book_append_sheet(wb, ws, sheetName(key, used));
       });
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
-      XLSX.writeFile(wb, "agent_orders-" + stamp + ".xlsx");
+      const fileName = "agent_orders-" + stamp + ".xlsx";
+      const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([out], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
 
       const ids = rows.map((r: any) => r.order_id);
       const { data, error } = await supabase.rpc("admin_mark_orders_processed", {
         p_ids: ids,
       });
       if (error) throw new Error(error.message);
-      setMsg(
-        "Exported " + rows.length + " orders. " + String(data) + " marked as processed."
-      );
+
+      const count = rows.length;
+      setLastFile({ blob: blob, name: fileName });
       setRows([]);
       setLoaded(false);
+      setMsg(
+        "Exported " + count + " orders. " + String(data) + " marked as processed. If the download did not start, tap Download again below."
+      );
+      saveBlob(blob, fileName);
     } catch (e: any) {
       setErr(e && e.message ? e.message : "Export failed");
     }
@@ -160,6 +180,17 @@ export default function ExportOrdersPage() {
 
       {err && <div className="rounded-lg bg-red-100 p-3 text-sm text-red-700">{err}</div>}
       {msg && <div className="rounded-lg bg-green-100 p-3 text-sm text-green-800">{msg}</div>}
+
+      {lastFile && (
+        <div className="rounded-xl border p-4">
+          <button
+            onClick={() => saveBlob(lastFile.blob, lastFile.name)}
+            className="rounded-lg bg-black px-4 py-2 text-sm text-white"
+          >
+            Download again ({lastFile.name})
+          </button>
+        </div>
+      )}
 
       {loaded && (
         <div className="space-y-3 rounded-xl border p-4">
