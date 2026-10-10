@@ -93,11 +93,6 @@ export default function LoginPage() {
       <button onClick={handleReset} className="mt-4 text-left text-sm text-indigo underline">
         Forgot password?
       </button>
-
-      <p className="mt-6 text-sm text-ink/60">
-        No account yet?{" "}
-        <Link href="/signup" className="font-medium text-indigo underline">Create one</Link>
-      </p>
     </main>
   );
-}
+        }
