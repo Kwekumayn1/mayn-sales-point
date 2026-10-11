@@ -42,6 +42,7 @@ export default function MyOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const supabase: any = createClient();
@@ -56,7 +57,15 @@ export default function MyOrdersPage() {
     })();
   }, []);
 
-  const shown = rows.filter((r: any) => filter === "all" || r.status === filter);
+  const q = search.trim().toLowerCase();
+  const shown = rows.filter((r: any) => {
+    if (filter !== "all" && r.status !== filter) return false;
+    if (!q) return true;
+    const hay = [r.order_number, r.phone, r.product, r.item, r.customer]
+      .map((x: any) => String(x || "").toLowerCase())
+      .join(" ");
+    return hay.includes(q);
+  });
   const tabs = [
     ["all", "All"],
     ["paid", "Paid"],
@@ -72,7 +81,14 @@ export default function MyOrdersPage() {
         Orders placed through your account. The status is updated by the admin.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <input
+        value={search}
+        onChange={(e: any) => setSearch(e.target.value)}
+        placeholder="Search order number, phone or product"
+        className="mt-4 w-full rounded-xl border border-line bg-white p-3 text-base"
+      />
+
+      <div className="mt-3 flex flex-wrap gap-2">
         {tabs.map((t: any) => (
           <button
             key={t[0]}
@@ -115,7 +131,7 @@ export default function MyOrdersPage() {
           </div>
         ))}
         {!loading && shown.length === 0 && !err && (
-          <p className="py-8 text-center text-sm text-ink/50">No orders here yet.</p>
+          <p className="py-8 text-center text-sm text-ink/50">No orders found.</p>
         )}
       </div>
     </main>
