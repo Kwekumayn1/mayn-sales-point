@@ -44,6 +44,7 @@ export default function AdminOrderStatusPage() {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
   async function load() {
     const supabase: any = createClient();
@@ -85,7 +86,15 @@ export default function AdminOrderStatusPage() {
     load();
   }
 
-  const shown = rows.filter((r: any) => filter === "all" || r.status === filter);
+  const q = search.trim().toLowerCase();
+  const shown = rows.filter((r: any) => {
+    if (filter !== "all" && r.status !== filter) return false;
+    if (!q) return true;
+    const hay = [r.order_number, r.phone, r.product, r.item, r.vendor]
+      .map((x: any) => String(x || "").toLowerCase())
+      .join(" ");
+    return hay.includes(q);
+  });
   const tabs = [
     ["all", "All"],
     ["paid", "Paid"],
@@ -118,7 +127,14 @@ export default function AdminOrderStatusPage() {
       {err && <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{err}</div>}
       {msg && <div className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-800">{msg}</div>}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <input
+        value={search}
+        onChange={(e: any) => setSearch(e.target.value)}
+        placeholder="Search order number, phone, product or vendor"
+        className="mt-4 w-full rounded-xl border border-line bg-white p-3 text-base"
+      />
+
+      <div className="mt-3 flex flex-wrap gap-2">
         {tabs.map((t: any) => (
           <button
             key={t[0]}
@@ -161,7 +177,7 @@ export default function AdminOrderStatusPage() {
           </div>
         ))}
         {!loading && shown.length === 0 && (
-          <p className="py-8 text-center text-sm text-ink/50">No orders here.</p>
+          <p className="py-8 text-center text-sm text-ink/50">No orders found.</p>
         )}
       </div>
     </main>
