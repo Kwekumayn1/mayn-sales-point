@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import { sortVariants } from "./sort-helper";
+
 // Set to true if your order list / export shows field names better when
 // stored by label instead of by field id.
 const STORE_BY_LABEL = false;
@@ -18,7 +20,7 @@ type Field = {
   sort_order: number | null;
 };
 
-const money = (n: number) => "GH₵ " + Number(n).toFixed(2);
+const money = (n: number) => "GHS " + Number(n).toFixed(2);
 
 function inputModeFor(t: string | null): "numeric" | "tel" | "email" | "text" {
   const x = (t || "").toLowerCase();
@@ -94,7 +96,8 @@ export default function WalletOrderPage() {
 
   const costOfProduct = (p: Product) => costs["product:" + p.id] ?? Number(p.base_price);
   const costOfVariant = (v: Variant) => costs["variant:" + v.id] ?? Number(v.base_price);
-  const variantsOf = (pid: string) => sortVariants(variants.filter((x) => x.product_id === pid), costOfVariant);
+  const variantsOf = (pid: string) =>
+    sortVariants(variants.filter((x) => x.product_id === pid), costOfVariant);
   const fieldsOf = (pid: string) => fields.filter((x) => x.product_id === pid);
 
   const tiles = useMemo(() => {
@@ -202,7 +205,7 @@ export default function WalletOrderPage() {
       />
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-      {loading && <p className="mt-4 text-sm text-ink/60">Loading…</p>}
+      {loading && <p className="mt-4 text-sm text-ink/60">Loading...</p>}
       {!loading && tiles.length === 0 && <p className="mt-4 text-sm text-ink/60">No products found.</p>}
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -291,7 +294,7 @@ export default function WalletOrderPage() {
                   disabled={busy}
                   className="mt-4 w-full rounded-pill bg-gold py-3 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  {busy ? "Processing…" : "Buy with wallet" + (cost !== null ? " · " + money(cost) : "")}
+                  {busy ? "Processing..." : "Buy with wallet" + (cost !== null ? " - " + money(cost) : "")}
                 </button>
               </>
             )}
@@ -301,3 +304,5 @@ export default function WalletOrderPage() {
     </div>
   );
 }
+
+// END OF FILE
