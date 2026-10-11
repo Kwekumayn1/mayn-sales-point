@@ -24,7 +24,9 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/community", label: "Community link" },
   { href: "/dashboard/admin/products", label: "Manage products" },
   { href: "/dashboard/admin/categories", label: "Manage categories" },
-  { href: "/dashboard/admin/order-status", label: "Orders status" },
+  { href: "/dashboard/admin/orders", label: "Manage orders" },
+  { href: "/dashboard/admin/order-status", label: "Order status" },
+  { href: "/dashboard/admin/export", label: "Export orders" },
   { href: "/dashboard/admin/vendor-prices", label: "Set vendor prices" },
   { href: "/dashboard/admin/wallets", label: "Wallet top-ups" },
   { href: "/dashboard/admin/withdrawals", label: "Withdrawals" },
@@ -107,7 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           aria-label="Open menu"
           className="rounded-lg bg-white/15 px-3 py-2 text-lg leading-none"
         >
-          ☰
+          &#9776;
         </button>
         <span className="font-bold">Mayn Sales Point</span>
       </header>
@@ -136,7 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             aria-label="Close menu"
             className="rounded-lg bg-white/15 px-3 py-1.5 text-lg leading-none md:hidden"
           >
-            ✕
+            &#10005;
           </button>
         </div>
 
@@ -184,4 +186,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
     </div>
   );
-  }
+}
+
+// END OF FILE
