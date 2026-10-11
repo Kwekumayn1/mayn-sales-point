@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-
+import { sortVariants } from "./sort-helper";
 // Set to true if your order list / export shows field names better when
 // stored by label instead of by field id.
 const STORE_BY_LABEL = false;
@@ -95,7 +94,7 @@ export default function WalletOrderPage() {
 
   const costOfProduct = (p: Product) => costs["product:" + p.id] ?? Number(p.base_price);
   const costOfVariant = (v: Variant) => costs["variant:" + v.id] ?? Number(v.base_price);
-  const variantsOf = (pid: string) => variants.filter((x) => x.product_id === pid);
+  const variantsOf = (pid: string) => sortVariants(variants.filter((x) => x.product_id === pid), costOfVariant);
   const fieldsOf = (pid: string) => fields.filter((x) => x.product_id === pid);
 
   const tiles = useMemo(() => {
