@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type PriceableItem = {
@@ -14,6 +13,8 @@ type PriceableItem = {
   sku: string | null;
 };
 
+const money = (n: number) => "GHS " + Number(n).toFixed(2);
+
 export default function VendorProductsPage() {
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
@@ -22,6 +23,7 @@ export default function VendorProductsPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({});
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     void load();
@@ -29,7 +31,7 @@ export default function VendorProductsPage() {
 
   async function load() {
     setLoading(true);
-    const supabase = createClient();
+    const supabase: any = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -58,17 +60,22 @@ export default function VendorProductsPage() {
       .eq("is_active", true)
       .order("sort_order");
 
-    // If I was referred by a parent vendor, fetch their prices so my
-    // floor is their price (not the admin's base price) wherever they've
-    // priced the same item.
-    let parentProductPrices: Record<string, number> = {};
-    let parentVariantPrices: Record<string, number> = {};
+    // What this vendor really pays (includes prices the admin set for them).
+    const { data: buy } = await supabase.rpc("my_buying_prices");
+    const cost: Record<string, number> = {};
+    (buy || []).forEach((r: any) => {
+      cost[r.kind + ":" + r.item_id] = Number(r.price);
+    });
+
+    // If I was referred by a parent vendor, my floor is never below their price.
+    const parentProductPrices: Record<string, number> = {};
+    const parentVariantPrices: Record<string, number> = {};
     if (parentId) {
       const { data: pp } = await supabase
         .from("vendor_prices")
         .select("product_id, selling_price")
         .eq("vendor_id", parentId);
-      pp?.forEach((p) => {
+      (pp || []).forEach((p: any) => {
         parentProductPrices[p.product_id] = Number(p.selling_price);
       });
 
@@ -76,42 +83,50 @@ export default function VendorProductsPage() {
         .from("vendor_variant_prices")
         .select("variant_id, selling_price")
         .eq("vendor_id", parentId);
-      pv?.forEach((v) => {
+      (pv || []).forEach((v: any) => {
         parentVariantPrices[v.variant_id] = Number(v.selling_price);
       });
     }
 
     const variantsByProduct: Record<string, any[]> = {};
-    (variantList ?? []).forEach((v) => {
+    (variantList ?? []).forEach((v: any) => {
       variantsByProduct[v.product_id] = variantsByProduct[v.product_id] ?? [];
       variantsByProduct[v.product_id].push(v);
     });
 
+    function floorFor(kind: string, id: string, base: number, parentPrice: number | undefined) {
+      const mine = cost[kind + ":" + id] ?? base;
+      if (parentPrice !== undefined && parentPrice > mine) {
+        return { floorPrice: parentPrice, floorIsParent: true };
+      }
+      return { floorPrice: mine, floorIsParent: parentPrice !== undefined || mine !== base };
+    }
+
     const builtItems: PriceableItem[] = [];
-    (productList ?? []).forEach((p) => {
+    (productList ?? []).forEach((p: any) => {
       const variants = variantsByProduct[p.id] ?? [];
       if (variants.length > 0) {
-        variants.forEach((v) => {
-          const parentPrice = parentVariantPrices[v.id];
+        variants.forEach((v: any) => {
+          const f = floorFor("variant", v.id, Number(v.base_price), parentVariantPrices[v.id]);
           builtItems.push({
-            key: `variant:${v.id}`,
+            key: "variant:" + v.id,
             kind: "variant",
             id: v.id,
-            displayName: `${p.name} — ${v.name}`,
-            floorPrice: parentPrice ?? Number(v.base_price),
-            floorIsParent: parentPrice !== undefined,
+            displayName: p.name + " - " + v.name,
+            floorPrice: f.floorPrice,
+            floorIsParent: f.floorIsParent,
             sku: p.sku,
           });
         });
       } else {
-        const parentPrice = parentProductPrices[p.id];
+        const f = floorFor("product", p.id, Number(p.base_price), parentProductPrices[p.id]);
         builtItems.push({
-          key: `product:${p.id}`,
+          key: "product:" + p.id,
           kind: "product",
           id: p.id,
           displayName: p.name,
-          floorPrice: parentPrice ?? Number(p.base_price),
-          floorIsParent: parentPrice !== undefined,
+          floorPrice: f.floorPrice,
+          floorIsParent: f.floorIsParent,
           sku: p.sku,
         });
       }
@@ -129,27 +144,45 @@ export default function VendorProductsPage() {
       .eq("vendor_id", user.id);
 
     const priceMap: Record<string, string> = {};
-    myProductPrices?.forEach((p) => {
-      priceMap[`product:${p.product_id}`] = String(p.selling_price);
+    (myProductPrices || []).forEach((p: any) => {
+      priceMap["product:" + p.product_id] = String(p.selling_price);
     });
-    myVariantPrices?.forEach((v) => {
-      priceMap[`variant:${v.variant_id}`] = String(v.selling_price);
+    (myVariantPrices || []).forEach((v: any) => {
+      priceMap["variant:" + v.variant_id] = String(v.selling_price);
     });
     setPrices(priceMap);
 
     setLoading(false);
   }
 
+  function sendToCorrection(key: string, message: string) {
+    setErrors((e) => ({ ...e, [key]: message }));
+    const el = inputRefs.current[key];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.focus();
+      el.select();
+    }
+  }
+
   async function handleSave(item: PriceableItem) {
     setErrors((e) => ({ ...e, [item.key]: "" }));
-    const value = Number(prices[item.key]);
-    if (Number.isNaN(value) || value < 0) {
-      setErrors((e) => ({ ...e, [item.key]: "Enter a valid price." }));
+    const raw = (prices[item.key] || "").trim();
+    const value = Number(raw);
+    if (raw === "" || Number.isNaN(value) || value < 0) {
+      sendToCorrection(item.key, "Enter a valid price.");
+      return;
+    }
+    if (value + 0.0001 < item.floorPrice) {
+      sendToCorrection(
+        item.key,
+        "Price too low. The lowest you can set is " + money(item.floorPrice) + ". Please enter that or higher."
+      );
       return;
     }
 
     setSavingKey(item.key);
-    const supabase = createClient();
+    const supabase: any = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -175,7 +208,7 @@ export default function VendorProductsPage() {
 
     setSavingKey(null);
     if (error) {
-      setErrors((e) => ({ ...e, [item.key]: error.message }));
+      sendToCorrection(item.key, error.message);
       return;
     }
     setSavedKeys((s) => ({ ...s, [item.key]: true }));
@@ -185,7 +218,7 @@ export default function VendorProductsPage() {
   if (loading) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-16 text-sm text-ink/60">
-        Loading…
+        Loading...
       </main>
     );
   }
@@ -195,14 +228,8 @@ export default function VendorProductsPage() {
       <main className="mx-auto max-w-2xl px-6 py-16">
         <h1 className="font-display text-2xl text-indigo">My Prices</h1>
         <p className="mt-3 text-sm text-ink/70">
-          You need to become a vendor first before setting product prices.
+          Your account is not set up as a vendor yet. Please sign out and sign in again, or contact support.
         </p>
-        <Link
-          href="/dashboard/store"
-          className="mt-4 inline-block rounded-pill bg-gold px-6 py-2 text-sm font-medium text-indigo hover:bg-gold-dark"
-        >
-          Become a Vendor
-        </Link>
       </main>
     );
   }
@@ -212,9 +239,8 @@ export default function VendorProductsPage() {
       <p className="text-xs uppercase tracking-wide text-ink/50">Dashboard</p>
       <h1 className="mt-1 font-display text-2xl text-indigo">My Prices</h1>
       <p className="mt-2 text-sm text-ink/60">
-        Set your own selling price for each item. If you joined through
-        someone's referral link, your price must be above theirs — otherwise
-        it must be above the platform's base price.
+        Set your own selling price for each item. You cannot go below your buying price shown under
+        each item. If you joined through someone's referral link, your buying price is their price.
       </p>
 
       {items.length === 0 && (
@@ -235,27 +261,32 @@ export default function VendorProductsPage() {
                 <div>
                   <p className="font-medium">{item.displayName}</p>
                   <p className="text-xs text-ink/50">
-                    {item.floorIsParent ? "Buying price" : "Base price"} GH₵
-                    {item.floorPrice.toFixed(2)}
-                    {item.sku ? ` · ${item.sku}` : ""}
+                    {item.floorIsParent ? "Buying price" : "Base price"} {money(item.floorPrice)}
+                    {item.sku ? " | " + item.sku : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-ink/50">GH₵</span>
+                  <span className="text-sm text-ink/50">GHS</span>
                   <input
+                    ref={(el) => {
+                      inputRefs.current[item.key] = el;
+                    }}
                     inputMode="decimal"
                     value={currentPrice}
                     onChange={(e) =>
                       setPrices((prev) => ({ ...prev, [item.key]: e.target.value }))
                     }
-                    className="w-28 border border-line px-3 py-2 text-sm outline-none focus:border-indigo"
+                    className={
+                      "w-28 border px-3 py-2 text-sm outline-none focus:border-indigo " +
+                      (errors[item.key] ? "border-red-500" : "border-line")
+                    }
                   />
                   <button
                     onClick={() => handleSave(item)}
                     disabled={savingKey === item.key}
                     className="rounded-pill bg-indigo px-4 py-2 text-sm font-medium text-white hover:bg-indigo-light disabled:opacity-60"
                   >
-                    {savingKey === item.key ? "Saving…" : "Save"}
+                    {savingKey === item.key ? "Saving..." : "Save"}
                   </button>
                 </div>
               </div>
@@ -265,11 +296,11 @@ export default function VendorProductsPage() {
                     Number(profit) >= 0 ? "text-leaf" : "text-red-600"
                   }`}
                 >
-                  Your profit: GH₵{profit}
+                  Your profit: GHS {profit}
                 </p>
               )}
               {errors[item.key] && (
-                <p className="mt-1 text-xs text-red-600">{errors[item.key]}</p>
+                <p className="mt-1 text-xs font-medium text-red-600">{errors[item.key]}</p>
               )}
               {savedKeys[item.key] && (
                 <p className="mt-1 text-xs text-leaf">Saved.</p>
@@ -280,4 +311,6 @@ export default function VendorProductsPage() {
       </div>
     </main>
   );
-      }
+}
+
+// END OF FILE
