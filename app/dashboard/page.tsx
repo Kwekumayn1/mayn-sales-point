@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import ProfitCard from "./profit-card";
 
 export default async function DashboardPage() {
   const supabase = createClient();
@@ -8,7 +9,7 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
 
   // Middleware already redirects unauthenticated visitors, but a server
-  // component should never assume — check again before rendering anything.
+  // component should never assume - check again before rendering anything.
   if (!user) {
     return null;
   }
@@ -19,12 +20,23 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
-  const { data: walletTxns } = await supabase
-    .from("wallet_transactions")
-    .select("amount")
-    .eq("vendor_id", user.id);
-
-  const walletTotal = (walletTxns ?? []).reduce((sum, t) => sum + Number(t.amount), 0);
+  // Read every wallet row in pages, so balances stay correct even when
+  // a vendor has more than 1000 transactions.
+  let profit = 0;
+  let purchase = 0;
+  for (let from = 0; ; from += 1000) {
+    const { data: rows } = await supabase
+      .from("wallet_transactions")
+      .select("amount, wallet_type")
+      .eq("vendor_id", user.id)
+      .range(from, from + 999);
+    const list = rows ?? [];
+    for (const t of list) {
+      if (t.wallet_type === "profit") profit += Number(t.amount);
+      else if (t.wallet_type === "purchase") purchase += Number(t.amount);
+    }
+    if (list.length < 1000) break;
+  }
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
@@ -35,7 +47,9 @@ export default async function DashboardPage() {
         Welcome, {profile?.full_name ?? user.email}
       </h1>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <ProfitCard profit={profit} purchase={purchase} />
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-line bg-white p-5">
           <p className="text-xs text-ink/50">Role</p>
           <p className="mt-1 font-display text-lg capitalize">
@@ -48,15 +62,13 @@ export default async function DashboardPage() {
             {profile?.vendor_id ?? "Not assigned yet"}
           </p>
         </div>
-        <div className="rounded-2xl border border-line bg-white p-5">
-          <p className="text-xs text-ink/50">Combined wallet balance</p>
-          <p className="mt-1 font-display text-lg">GH₵{walletTotal.toFixed(2)}</p>
-        </div>
       </div>
 
       <div className="mt-8 rounded-2xl border border-dashed border-line p-6 text-sm text-ink/60">
-        Open the menu (☰ at the top left) to reach your tools.
+        Open the menu (the three lines at the top left) to reach your tools.
       </div>
     </main>
   );
 }
+
+// END OF FILE
