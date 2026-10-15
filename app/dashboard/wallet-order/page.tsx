@@ -152,6 +152,17 @@ export default function WalletOrderPage() {
       return;
     }
     const row = Array.isArray(data) ? data[0] : data;
+
+    // Ask the site to send this paid order to the data supplier right away.
+    // It does nothing for products that are not sent automatically.
+    if (row && row.order_number) {
+      void fetch("/api/justice/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_number: row.order_number }),
+      }).catch(() => {});
+    }
+
     const { data: u } = await supabase.auth.getUser();
     if (u?.user?.id) await loadBalance(u.user.id);
     const name = open.name + (chosen ? " - " + chosen.name : "");
