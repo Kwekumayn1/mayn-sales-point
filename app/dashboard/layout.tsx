@@ -26,6 +26,7 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/categories", label: "Manage categories" },
   { href: "/dashboard/admin/order-status", label: "Order status" },
   { href: "/dashboard/admin/check-payments", label: "Check payments" },
+  { href: "/dashboard/admin/justice", label: "Justice orders" },
   { href: "/dashboard/admin/export", label: "Export orders" },
   { href: "/dashboard/admin/vendor-prices", label: "Set vendor prices" },
   { href: "/dashboard/admin/wallets", label: "Wallet top-ups" },
