@@ -55,8 +55,17 @@ export function networkOf(productName: any): string {
 
 export function beneficiaryOf(values: any): string {
   if (!values || typeof values !== "object") return "";
-  for (const k of Object.keys(values)) {
-    if (/benef|recipient|phone|number/i.test(k)) return String(values[k] || "");
+  const keys = Object.keys(values);
+  // 1) A field whose label looks like a phone/beneficiary field.
+  for (const k of keys) {
+    if (/benef|recipient|phone|number/i.test(k) && normalizePhone(values[k])) {
+      return String(values[k]);
+    }
+  }
+  // 2) Wallet orders save values by field id, not by label:
+  //    use the first value that is a valid phone number.
+  for (const k of keys) {
+    if (normalizePhone(values[k])) return String(values[k]);
   }
   return "";
 }
