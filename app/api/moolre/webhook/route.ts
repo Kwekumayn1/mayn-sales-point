@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lookupMoolre, judge } from "@/lib/payments/moolre-lookup";
+import { dispatchOrder } from "@/lib/suppliers/dispatch";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function pickReference(p: any): string {
   const places = [p, p && p.data, p && p.payload, p && p.transaction];
@@ -83,6 +84,15 @@ export async function POST(request: Request) {
       console.log("moolre webhook update failed", reference, upErr.message);
       return NextResponse.json({ error: "Could not update order." }, { status: 500 });
     }
+
+    // Send the order to Justice (does nothing unless auto-send is ON).
+    try {
+      const sent: any = await dispatchOrder(order.id);
+      console.log("justice dispatch", reference, sent.result, sent.note);
+    } catch (e: any) {
+      console.log("justice dispatch crashed", reference, e && e.message);
+    }
+
     return NextResponse.json({ ok: true });
   }
 
