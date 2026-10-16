@@ -13,6 +13,8 @@ const HOME_ITEMS: Item[] = [{ href: "/dashboard", label: "Home" }];
 const VENDOR_ITEMS: Item[] = [
   { href: "/dashboard/store", label: "My Storefront" },
   { href: "/dashboard/products", label: "My Prices" },
+  { href: "/dashboard/my-listings", label: "My Products" },
+  { href: "/dashboard/listing-orders", label: "Product orders" },
   { href: "/dashboard/my-orders", label: "My Orders" },
   { href: "/dashboard/wallet", label: "My Wallet" },
   { href: "/dashboard/wallet-order", label: "Buy for Customer" },
@@ -27,6 +29,7 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/order-status", label: "Order status" },
   { href: "/dashboard/admin/check-payments", label: "Check payments" },
   { href: "/dashboard/admin/justice", label: "Justice orders" },
+  { href: "/dashboard/admin/listings", label: "Vendor listings" },
   { href: "/dashboard/admin/export", label: "Export orders" },
   { href: "/dashboard/admin/vendor-prices", label: "Set vendor prices" },
   { href: "/dashboard/admin/wallets", label: "Wallet top-ups" },
