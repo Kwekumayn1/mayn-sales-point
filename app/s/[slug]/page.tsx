@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ListingBuy from "./listing-buy";
 
 type Variant = { id: string; name: string; price: number };
 type Card = {
   key: string;
   productId: string;
+  listingId: string | null;
   name: string;
   description: string | null;
   imageUrl: string | null;
   directPrice: number | null;
   variants: Variant[];
 };
+
+const CED = "GH\u20B5";
 
 function pick(obj: any, keys: string[]): any {
   for (const k of keys) {
@@ -31,9 +35,19 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
   const [debug, setDebug] = useState("");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [variantId, setVariantId] = useState<Record<string, string>>({});
+  const [paidOrder, setPaidOrder] = useState("");
 
   useEffect(() => {
-    const supabase = createClient();
+    try {
+      const q = new URLSearchParams(window.location.search).get("order");
+      if (q && /^MSP-L-[0-9]+$/.test(q)) setPaidOrder(q);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    const supabase: any = createClient();
     (async () => {
       const wanted = decodeURIComponent(params.slug).trim().toLowerCase();
       let v: any = null;
@@ -48,9 +62,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
       const rows: any[] = all.data || [];
       v =
         rows.find((r) =>
-          Object.values(r).some(
-            (x) => typeof x === "string" && x.trim().toLowerCase() === wanted
-          )
+          Object.values(r).some((x) => typeof x === "string" && x.trim().toLowerCase() === wanted)
         ) || null;
 
       if (!v) {
@@ -77,6 +89,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
         map.set(p.id, {
           key: p.id,
           productId: p.id,
+          listingId: null,
           name: p.name,
           description: p.description ?? null,
           imageUrl: p.image_url ?? null,
@@ -98,6 +111,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
         const existing: Card = map.get(p.id) || {
           key: p.id,
           productId: p.id,
+          listingId: null,
           name: p.name,
           description: p.description ?? null,
           imageUrl: p.image_url ?? null,
@@ -112,6 +126,24 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
         map.set(p.id, existing);
       });
 
+      // This vendor's own products (shown only on this store link).
+      const { data: ls } = await supabase
+        .from("vendor_listings_public")
+        .select("*")
+        .eq("vendor_id", vendorId);
+      (ls || []).forEach((l: any) => {
+        map.set("L-" + l.id, {
+          key: "L-" + l.id,
+          productId: "",
+          listingId: l.id,
+          name: l.name,
+          description: l.description ?? null,
+          imageUrl: l.image_url ?? null,
+          directPrice: Number(l.customer_price),
+          variants: [],
+        });
+      });
+
       const list = Array.from(map.values());
       list.forEach((c) => c.variants.sort((a, b) => a.price - b.price));
       const startPrice = (c: Card) =>
@@ -122,7 +154,7 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
     })();
   }, [params.slug]);
 
-  if (loading) return <main className="p-8 text-center text-indigo-light">Loading…</main>;
+  if (loading) return <main className="p-8 text-center text-indigo-light">Loading...</main>;
   if (notFound)
     return (
       <main className="p-8 text-center">
@@ -145,6 +177,16 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
         <h1 className="text-2xl">{storeName}</h1>
         <p className="mt-1 text-sm text-white/80">Tap a product to choose and buy</p>
       </header>
+
+      {paidOrder && (
+        <div className="mb-4 rounded-2xl border border-line bg-white p-4 text-sm">
+          <p className="font-semibold text-indigo">Thank you! Your order {paidOrder} has been received.</p>
+          <p className="mt-1 text-ink/70">
+            The seller will contact you on the phone number you gave. If you were not charged, your order is
+            cancelled automatically.
+          </p>
+        </div>
+      )}
 
       {cards.length === 0 && (
         <p className="py-10 text-center text-sm text-ink/60">
@@ -172,13 +214,16 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-3xl text-indigo-light/40">▢</div>
+                  <div className="flex h-full items-center justify-center text-3xl text-indigo-light/40">
+                    {"\u25A2"}
+                  </div>
                 )}
               </div>
               <div className="p-2.5">
                 <div className="line-clamp-2 text-sm font-semibold leading-tight">{c.name}</div>
                 <div className="mt-1 text-sm font-bold text-indigo">
-                  {c.variants.length ? "From " : ""}GH₵ {Number(fromPrice).toFixed(2)}
+                  {c.variants.length ? "From " : ""}
+                  {CED} {Number(fromPrice).toFixed(2)}
                 </div>
               </div>
             </button>
@@ -187,57 +232,67 @@ export default function StorefrontPage({ params }: { params: { slug: string } })
       </div>
 
       {open && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white p-4 shadow-2xl">
+        <div className="fixed inset-x-0 bottom-0 z-20 max-h-[85vh] overflow-y-auto border-t border-line bg-white p-4 shadow-2xl">
           <div className="mx-auto flex max-w-xl flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-base font-bold">{open.name}</div>
-                {open.description && (
-                  <div className="mt-0.5 text-xs text-ink/60">{open.description}</div>
-                )}
+                {open.description && <div className="mt-0.5 text-xs text-ink/60">{open.description}</div>}
               </div>
               <button
                 onClick={() => setOpenKey(null)}
                 className="rounded-pill bg-paper px-3 py-1 text-sm"
                 aria-label="Close"
               >
-                ✕
+                {"\u2715"}
               </button>
             </div>
 
-            {open.variants.length > 0 && (
-              <select
-                value={selectedVariant(open)?.id}
-                onChange={(e) => setVariantId({ ...variantId, [open.key]: e.target.value })}
-                className="w-full rounded-xl border border-line bg-white p-3 text-base"
-              >
-                {open.variants.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name} — GH₵ {x.price.toFixed(2)}
-                  </option>
-                ))}
-              </select>
-            )}
+            {open.listingId ? (
+              <ListingBuy
+                key={open.listingId}
+                listingId={open.listingId}
+                slug={params.slug}
+                price={Number(open.directPrice)}
+              />
+            ) : (
+              <>
+                {open.variants.length > 0 && (
+                  <select
+                    value={selectedVariant(open)?.id}
+                    onChange={(e) => setVariantId({ ...variantId, [open.key]: e.target.value })}
+                    className="w-full rounded-xl border border-line bg-white p-3 text-base"
+                  >
+                    {open.variants.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name} - {CED} {x.price.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                )}
 
-            {(() => {
-              const sv = open.variants.length ? selectedVariant(open) : undefined;
-              const price = sv ? sv.price : open.directPrice;
-              const href = sv
-                ? `/checkout?vendor=${vendorId}&variant=${sv.id}`
-                : `/checkout?vendor=${vendorId}&product=${open.productId}`;
-              return (
-                <a
-                  href={href}
-                  className="block rounded-pill bg-gold py-3 text-center text-base font-bold text-white shadow"
-                >
-                  Buy now · GH₵ {Number(price).toFixed(2)}
-                </a>
-              );
-            })()}
+                {(() => {
+                  const sv = open.variants.length ? selectedVariant(open) : undefined;
+                  const price = sv ? sv.price : open.directPrice;
+                  const href = sv
+                    ? `/checkout?vendor=${vendorId}&variant=${sv.id}`
+                    : `/checkout?vendor=${vendorId}&product=${open.productId}`;
+                  return (
+                    <a
+                      href={href}
+                      className="block rounded-pill bg-gold py-3 text-center text-base font-bold text-white shadow"
+                    >
+                      Buy now - {CED} {Number(price).toFixed(2)}
+                    </a>
+                  );
+                })()}
+              </>
+            )}
           </div>
         </div>
       )}
     </main>
   );
-    }
-                                                                       
+}
+
+// END OF FILE
