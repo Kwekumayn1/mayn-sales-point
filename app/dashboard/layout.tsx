@@ -13,7 +13,7 @@ const HOME_ITEMS: Item[] = [{ href: "/dashboard", label: "Home" }];
 const VENDOR_ITEMS: Item[] = [
   { href: "/dashboard/store", label: "My Storefront" },
   { href: "/dashboard/products", label: "My Prices" },
-  { href: "/dashboard/my-listings", label: "My Products" },
+  { href: "/dashboard/my-listings", label: "Sell own product" },
   { href: "/dashboard/listing-orders", label: "Product orders" },
   { href: "/dashboard/my-orders", label: "My Orders" },
   { href: "/dashboard/wallet", label: "My Wallet" },
