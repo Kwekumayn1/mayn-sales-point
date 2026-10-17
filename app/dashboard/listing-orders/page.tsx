@@ -81,7 +81,13 @@ export default function ListingOrdersPage() {
               <div className="mt-2 rounded-xl bg-paper p-3 text-sm text-ink">
                 <p>Customer: {o.customer_name || "Not given"}</p>
                 <p>Phone: {o.customer_phone}</p>
-                {o.customer_details && <p>Details: {o.customer_details}</p>}
+                {o.custom_values &&
+                  Object.entries(o.custom_values).map(([k, v]) => (
+                    <p key={k}>
+                      {k}: <b>{String(v)}</b>
+                    </p>
+                  ))}
+                {o.customer_details && <p>Note: {o.customer_details}</p>}
                 <p className="mt-1">
                   Customer paid {money(o.amount)} | You receive <b>{money(o.cost_price)}</b>
                 </p>
