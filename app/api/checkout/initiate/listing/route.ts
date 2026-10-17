@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const admin: any = createAdminClient();
     const { data: listing } = await admin
       .from("vendor_listings")
-      .select("id, vendor_id, name, cost_price, customer_price, status, paused")
+      .select("id, vendor_id, name, cost_price, customer_price, status, paused, custom_fields")
       .eq("id", listingId)
       .maybeSingle();
 
@@ -43,6 +43,20 @@ export async function POST(request: Request) {
     const amount = Number(listing.customer_price);
     if (!(amount > 0)) {
       return NextResponse.json({ error: "This product has no valid price." }, { status: 400 });
+    }
+
+    // Answers are matched to the questions the seller set; anything else is ignored.
+    const asked: any[] = Array.isArray(listing.custom_fields) ? listing.custom_fields : [];
+    const given: any = body.customValues && typeof body.customValues === "object" ? body.customValues : {};
+    const customValues: Record<string, string> = {};
+    for (const f of asked) {
+      const label = String((f && f.label) || "").trim();
+      if (!label) continue;
+      const val = String(given[label] == null ? "" : given[label]).trim().slice(0, 200);
+      if (f.required && !val) {
+        return NextResponse.json({ error: "Please fill in: " + label }, { status: 400 });
+      }
+      if (val) customValues[label] = val;
     }
 
     const { data: order, error: insErr } = await admin
@@ -56,6 +70,7 @@ export async function POST(request: Request) {
         customer_name: customerName || null,
         customer_phone: phone,
         customer_details: details || null,
+        custom_values: customValues,
       })
       .select("id, order_number")
       .single();
