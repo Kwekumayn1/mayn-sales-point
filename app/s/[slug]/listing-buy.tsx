@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type Props = {
   listingId: string;
@@ -8,12 +9,33 @@ type Props = {
   price: number;
 };
 
+type Field = { label: string; required: boolean };
+
 export default function ListingBuy({ listingId, slug, price }: Props) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [fields, setFields] = useState<Field[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [details, setDetails] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const supabase: any = createClient();
+    (async () => {
+      const { data } = await supabase
+        .from("vendor_listings_public")
+        .select("custom_fields")
+        .eq("id", listingId)
+        .maybeSingle();
+      const raw: any[] = data && Array.isArray(data.custom_fields) ? data.custom_fields : [];
+      setFields(
+        raw
+          .filter((f: any) => f && typeof f.label === "string" && f.label.trim())
+          .map((f: any) => ({ label: String(f.label), required: !!f.required }))
+      );
+    })();
+  }, [listingId]);
 
   async function pay() {
     setError("");
@@ -22,12 +44,25 @@ export default function ListingBuy({ listingId, slug, price }: Props) {
       setError("Enter your 10-digit phone number, like 0241234567.");
       return;
     }
+    for (const f of fields) {
+      if (f.required && !(answers[f.label] || "").trim()) {
+        setError("Please fill in: " + f.label);
+        return;
+      }
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/checkout/listing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listingId, slug, customerName: name, customerPhone: phone, details }),
+        body: JSON.stringify({
+          listingId,
+          slug,
+          customerName: name,
+          customerPhone: phone,
+          details,
+          customValues: answers,
+        }),
       });
       const j: any = await res.json().catch(() => ({}));
       if (!res.ok || !j.authorizationUrl) {
@@ -53,10 +88,20 @@ export default function ListingBuy({ listingId, slug, price }: Props) {
         inputMode="tel"
         className={box}
       />
+      {fields.map((f) => (
+        <input
+          key={f.label}
+          value={answers[f.label] || ""}
+          onChange={(e: any) => setAnswers({ ...answers, [f.label]: e.target.value })}
+          placeholder={f.label + (f.required ? " (required)" : " (optional)")}
+          className={box}
+          maxLength={200}
+        />
+      ))}
       <textarea
         value={details}
         onChange={(e: any) => setDetails(e.target.value)}
-        placeholder="Extra details for the seller (optional)"
+        placeholder="Anything else for the seller (optional)"
         rows={2}
         className={box}
         maxLength={500}
