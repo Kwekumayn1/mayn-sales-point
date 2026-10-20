@@ -45,6 +45,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [level, setLevel] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const [waLink, setWaLink] = useState("");
+  const [pendingTopups, setPendingTopups] = useState(0);
+  const [pendingPayouts, setPendingPayouts] = useState(0);
 
   useEffect(() => {
     setOpen(false);
@@ -79,6 +81,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Hidden by default until we know the level, so 2nd-level vendors never see it.
   const hideAffiliates = !isAdmin && level !== 1;
 
+  // Admin alerts: checked now, every 20 seconds, and when the tab is opened again.
+  useEffect(() => {
+    if (!isAdmin) return;
+    const supabase: any = createClient();
+    let stop = false;
+    async function check() {
+      const t = await supabase
+        .from("topup_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      const p = await supabase
+        .from("listing_orders")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["accepted", "cancelled"]);
+      if (stop) return;
+      setPendingTopups(typeof t.count === "number" ? t.count : 0);
+      setPendingPayouts(typeof p.count === "number" ? p.count : 0);
+    }
+    void check();
+    const timer = setInterval(check, 20000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [isAdmin, pathname]);
+
   useEffect(() => {
     if (ready && hideAffiliates && pathname.startsWith("/dashboard/affiliates")) {
       router.replace("/dashboard");
@@ -89,20 +122,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
   }
 
+  function badgeFor(href: string): number {
+    if (href === "/dashboard/admin/wallets") return pendingTopups;
+    if (href === "/dashboard/admin/listings") return pendingPayouts;
+    return 0;
+  }
+
   function renderItems(list: Item[]) {
-    return list.map((it) => (
-      <Link
-        key={it.href}
-        href={it.href}
-        className={`block rounded-xl px-4 py-3 text-sm ${
-          isActive(it.href)
-            ? "bg-gold/20 font-semibold text-indigo"
-            : "text-ink hover:bg-paper"
-        }`}
-      >
-        {it.label}
-      </Link>
-    ));
+    return list.map((it) => {
+      const n = isAdmin ? badgeFor(it.href) : 0;
+      return (
+        <Link
+          key={it.href}
+          href={it.href}
+          className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm ${
+            isActive(it.href)
+              ? "bg-gold/20 font-semibold text-indigo"
+              : "text-ink hover:bg-paper"
+          }`}
+        >
+          <span>{it.label}</span>
+          {n > 0 && (
+            <span className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{n}</span>
+          )}
+        </Link>
+      );
+    });
   }
 
   return (
@@ -116,6 +161,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           &#9776;
         </button>
         <span className="font-bold">Mayn Sales Point</span>
+        {isAdmin && pendingTopups + pendingPayouts > 0 && (
+          <span className="ml-auto rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold">
+            {pendingTopups + pendingPayouts}
+          </span>
+        )}
       </header>
 
       {open && (
@@ -173,7 +223,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      <div className="md:pl-72">{children}</div>
+      <div className="md:pl-72">
+        {isAdmin && pendingTopups > 0 && !pathname.startsWith("/dashboard/admin/wallets") && (
+          <Link
+            href="/dashboard/admin/wallets"
+            className="block bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900"
+          >
+            {pendingTopups} wallet top-up{pendingTopups === 1 ? "" : "s"} waiting for you. Tap to check and credit.
+          </Link>
+        )}
+        {isAdmin && pendingPayouts > 0 && !pathname.startsWith("/dashboard/admin/listings") && (
+          <Link
+            href="/dashboard/admin/listings"
+            className="block bg-blue-100 px-4 py-3 text-sm font-semibold text-blue-900"
+          >
+            {pendingPayouts} vendor payout{pendingPayouts === 1 ? "" : "s"} or refund{pendingPayouts === 1 ? "" : "s"} to
+            settle. Tap to open.
+          </Link>
+        )}
+        {children}
+      </div>
 
       {waLink && (
         <a
