@@ -118,4 +118,49 @@ export default function AdminWalletsPage() {
       <SmsBox pending={pending} onDone={load} />
 
       <div className="mt-10">
-        <h2 className="font-display text-lg text-indigo">Pending requests ({pending.length})</h2>
+        <h2 className="font-display text-lg text-indigo">Pending requests ({pending.length})</h2>        {loadError && (
+          <p className="mt-3 text-sm text-red-600">Could not load the requests: {loadError}</p>
+        )}
+        {!loadError && pending.length === 0 && (
+          <p className="mt-3 text-sm text-ink/60">No pending top-up requests.</p>
+        )}
+        <div className="mt-4 divide-y divide-line border-t border-line">
+          {pending.map((r: any) => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
+              <div>
+                <p className="font-medium">
+                  {r.profiles?.full_name || "Vendor"}
+                  {r.profiles?.vendor_id ? " (" + r.profiles.vendor_id + ")" : ""}
+                </p>
+                <p className="text-xs text-ink/50">
+                  GHS {Number(r.amount).toFixed(2)} {" | "} ref: {r.momo_reference} {" | "}
+                  {new Date(r.created_at).toLocaleString("en-GB", { timeZone: "Africa/Accra" })}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleConfirm(r.id)}
+                  disabled={processingId === r.id}
+                  className="rounded-pill bg-leaf px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => handleReject(r.id)}
+                  disabled={processingId === r.id}
+                  className="rounded-pill border border-line px-4 py-2 text-sm disabled:opacity-60"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <ManualCredit />
+    </main>
+  );
+}
+
+// END OF FILE
