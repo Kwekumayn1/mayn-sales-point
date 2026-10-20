@@ -10,9 +10,15 @@ export default function AdminWalletsPage() {
   const [allowed, setAllowed] = useState(false);
   const [pending, setPending] = useState<any[]>([]);
   const [processingId, setProcessingId] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     void load();
+    const timer = setInterval(() => {
+      void load();
+    }, 20000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function load() {
@@ -35,12 +41,33 @@ export default function AdminWalletsPage() {
       setLoading(false);
       return;
     }
-    const { data } = await supabase
+
+    // "profiles!vendor_id" names exactly which link to use (the vendor who asked).
+    const first = await supabase
       .from("topup_requests")
-      .select("id, amount, momo_reference, status, created_at, profiles(full_name, vendor_id)")
+      .select("id, vendor_id, amount, momo_reference, status, created_at, profiles!vendor_id(full_name, vendor_id)")
       .eq("status", "pending")
       .order("created_at", { ascending: true });
-    setPending(data ?? []);
+
+    if (!first.error) {
+      setLoadError("");
+      setPending(first.data ?? []);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback: load the requests without names, so they are never hidden.
+    const second = await supabase
+      .from("topup_requests")
+      .select("id, vendor_id, amount, momo_reference, status, created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+    if (second.error) {
+      setLoadError(second.error.message);
+    } else {
+      setLoadError("");
+      setPending(second.data ?? []);
+    }
     setLoading(false);
   }
 
@@ -91,46 +118,4 @@ export default function AdminWalletsPage() {
       <SmsBox pending={pending} onDone={load} />
 
       <div className="mt-10">
-        <h2 className="font-display text-lg text-indigo">Pending requests</h2>
-        {pending.length === 0 && (
-          <p className="mt-3 text-sm text-ink/60">No pending top-up requests.</p>
-        )}
-        <div className="mt-4 divide-y divide-line border-t border-line">
-          {pending.map((r: any) => (
-            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-              <div>
-                <p className="font-medium">
-                  {r.profiles?.full_name} ({r.profiles?.vendor_id})
-                </p>
-                <p className="text-xs text-ink/50">
-                  GHS {Number(r.amount).toFixed(2)} {" | "} ref: {r.momo_reference} {" | "}
-                  {new Date(r.created_at).toLocaleString()}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleConfirm(r.id)}
-                  disabled={processingId === r.id}
-                  className="rounded-pill bg-leaf px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => handleReject(r.id)}
-                  disabled={processingId === r.id}
-                  className="rounded-pill border border-line px-4 py-2 text-sm disabled:opacity-60"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <ManualCredit />
-    </main>
-  );
-}
-
-// END OF FILE
+        <h2 className="font-display text-lg text-indigo">Pending requests ({pending.length})</h2>
