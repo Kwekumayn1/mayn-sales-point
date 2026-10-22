@@ -32,6 +32,7 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/listings", label: "Vendor listings" },
   { href: "/dashboard/admin/export", label: "Export orders" },
   { href: "/dashboard/admin/vendor-prices", label: "Set vendor prices" },
+  { href: "/dashboard/admin/accounts", label: "Account review" },
   { href: "/dashboard/admin/wallets", label: "Wallet top-ups" },
   { href: "/dashboard/admin/withdrawals", label: "Withdrawals" },
 ];
@@ -67,6 +68,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (data) {
         setRole(data.role ?? null);
         setName(data.full_name ?? "");
+      }
+      // Blocked accounts are signed out straight away.
+      const blk: any = await supabase.from("profiles").select("blocked").eq("id", user.id).maybeSingle();
+      if (blk && blk.data && blk.data.blocked === true) {
+        await supabase.auth.signOut();
+        window.location.href = "/login?blocked=1";
+        return;
       }
       const { data: lvl } = await supabase.rpc("my_vendor_level");
       setLevel(typeof lvl === "number" ? lvl : null);
