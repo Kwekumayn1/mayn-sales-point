@@ -20,6 +20,32 @@ function readGb(item: any): any {
   return n;
 }
 
+function fieldsOf(r: any): any {
+  let f = r && r.fields ? r.fields : {};
+  if (typeof f === "string") {
+    try {
+      f = JSON.parse(f);
+    } catch (e) {
+      f = {};
+    }
+  }
+  return f && typeof f === "object" ? f : {};
+}
+
+// Same rule the database uses to pick the delivery number.
+function numberKey(r: any): string {
+  const f = fieldsOf(r);
+  const keys = Object.keys(f).filter((k) => String(f[k] == null ? "" : f[k]).trim() !== "");
+  const hit = keys.find((k) => /(number|phone|beneficiary|recipient|msisdn|contact|mobile|tel)/i.test(k));
+  return hit || keys[0] || "";
+}
+
+function showVal(v: any): string {
+  if (v == null) return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
 function sheetName(name: string, used: any): string {
   let base = String(name || "Orders").replace(/[\[\]:*?\/\\]/g, " ").trim();
   if (base === "") base = "Orders";
@@ -106,13 +132,31 @@ export default function ExportOrdersPage() {
       order.forEach((key: string) => {
         const list = groups[key];
         const allGb = list.every((r: any) => readGb(r.item) !== null);
-        const aoa: any = [["NUMBER", allGb ? "DATA(GB)" : "ITEM"]];
+        const skip: any = {};
+        const extraKeys: any = [];
+        list.forEach((r: any) => {
+          const nk = numberKey(r);
+          if (nk) skip[nk] = true;
+        });
+        list.forEach((r: any) => {
+          Object.keys(fieldsOf(r)).forEach((k) => {
+            if (!skip[k] && extraKeys.indexOf(k) === -1) extraKeys.push(k);
+          });
+        });
+        const head: any = ["NUMBER", allGb ? "DATA(GB)" : "ITEM"];
+        extraKeys.forEach((k: string) => head.push(k));
+        const aoa: any = [head];
         list.forEach((r: any) => {
           const gb = readGb(r.item);
-          aoa.push([cleanNumber(r.phone), allGb ? gb : String(r.item || "")]);
+          const f = fieldsOf(r);
+          const line: any = [cleanNumber(r.phone), allGb ? gb : String(r.item || "")];
+          extraKeys.forEach((k: string) => line.push(showVal(f[k])));
+          aoa.push(line);
         });
         const ws = XLSX.utils.aoa_to_sheet(aoa);
-        ws["!cols"] = [{ wch: 16 }, { wch: 22 }];
+        const cols: any = [{ wch: 16 }, { wch: 22 }];
+        extraKeys.forEach(() => cols.push({ wch: 26 }));
+        ws["!cols"] = cols;
         XLSX.utils.book_append_sheet(wb, ws, sheetName(key, used));
       });
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
@@ -147,7 +191,7 @@ export default function ExportOrdersPage() {
       <h1 className="text-xl font-bold">Export orders</h1>
       <p className="text-sm">
         Only orders paid successfully and not exported before are included. Each
-        product gets its own sheet with NUMBER and DATA(GB). After export the orders
+        product gets its own sheet with NUMBER and DATA(GB), plus a column for every extra detail the customer filled in. After export the orders
         are marked as processed.
       </p>
 
@@ -202,6 +246,10 @@ export default function ExportOrdersPage() {
               {rows.map((r: any) => (
                 <div key={r.order_id}>
                   {r.product} | {cleanNumber(r.phone)} | {r.item}
+                  {Object.keys(fieldsOf(r))
+                    .filter((k) => k !== numberKey(r))
+                    .map((k) => " | " + k + ": " + showVal(fieldsOf(r)[k]))
+                    .join("")}
                 </div>
               ))}
             </div>
