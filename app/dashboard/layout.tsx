@@ -19,6 +19,7 @@ const VENDOR_ITEMS: Item[] = [
   { href: "/dashboard/wallet", label: "My Wallet" },
   { href: "/dashboard/wallet-order", label: "Buy for Customer" },
   { href: "/dashboard/affiliates", label: "My Affiliates" },
+  { href: "/dashboard/sub-vendors", label: "My Sub-vendors" },
 ];
 
 const ADMIN_ITEMS: Item[] = [
@@ -212,7 +213,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           {renderItems(
             hideAffiliates
-              ? VENDOR_ITEMS.filter((it) => it.href !== "/dashboard/affiliates")
+              ? VENDOR_ITEMS.filter(
+                  (it) => it.href !== "/dashboard/affiliates" && it.href !== "/dashboard/sub-vendors"
+                )
               : VENDOR_ITEMS
           )}
 
@@ -269,4 +272,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 }
 
-// END OF FILE
+// END OF FILEame="ml-2 roun
