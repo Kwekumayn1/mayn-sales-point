@@ -34,6 +34,7 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/export", label: "Export orders" },
   { href: "/dashboard/admin/vendor-prices", label: "Set vendor prices" },
   { href: "/dashboard/admin/accounts", label: "Account review" },
+  { href: "/dashboard/admin/notify", label: "Send notification" },
   { href: "/dashboard/admin/wallets", label: "Wallet top-ups" },
   { href: "/dashboard/admin/withdrawals", label: "Withdrawals" },
 ];
@@ -272,4 +273,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 }
 
-// END OF FILEame="ml-2 roun
+// END OF FILE
