@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PushButton from "./push-button";
 
 export const metadata: Metadata = {
   title: "Mayn Sales Point — Sell, Resell, Earn in Ghana",
@@ -9,7 +10,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-paper text-ink font-body antialiased">{children}</body>
+      <body className="bg-paper text-ink font-body antialiased">
+        {children}
+        <PushButton />
+      </body>
     </html>
   );
 }
+
+// END OF FILE
