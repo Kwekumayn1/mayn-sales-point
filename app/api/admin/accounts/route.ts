@@ -29,6 +29,125 @@ export async function POST(request: Request) {
 
   const body: any = await request.json().catch(() => ({}));
 
+  // ---- Move a vendor under a different upline ----
+  if (body.action === "preview_move" || body.action === "move") {
+    const id = String(body.userId || "");
+    if (!/^[0-9a-fA-F-]{36}$/.test(id)) return NextResponse.json({ error: "Account not found." }, { status: 400 });
+    const rawParent = String(body.newParentId == null ? "" : body.newParentId).trim();
+    if (!/^[0-9]{1,10}$/.test(rawParent)) {
+      return NextResponse.json({ error: "Type the ID number of the new upline, or 0 for no upline." }, { status: 400 });
+    }
+    const { data: target } = await admin
+      .from("profiles")
+      .select("id, full_name, vendor_id, role, parent_vendor_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!target) return NextResponse.json({ error: "Account not found." }, { status: 404 });
+    if (target.role === "admin" || target.role === "super_admin") {
+      return NextResponse.json({ error: "Admin accounts cannot be moved." }, { status: 400 });
+    }
+
+    const { data: everyone } = await admin.from("profiles").select("id, parent_vendor_id").limit(10000);
+    const pOf = new Map<string, string | null>();
+    const kidsOf = new Map<string, string[]>();
+    (everyone || []).forEach((r: any) => {
+      pOf.set(r.id, r.parent_vendor_id || null);
+      if (r.parent_vendor_id) {
+        const arr = kidsOf.get(r.parent_vendor_id) || [];
+        arr.push(r.id);
+        kidsOf.set(r.parent_vendor_id, arr);
+      }
+    });
+
+    let np: any = null;
+    if (rawParent !== "0") {
+      const found = await admin
+        .from("profiles")
+        .select("id, full_name, vendor_id, role, blocked")
+        .eq("vendor_id", rawParent)
+        .limit(2);
+      const list2: any[] = found.data || [];
+      if (list2.length === 0) return NextResponse.json({ error: "No vendor has that ID number." }, { status: 404 });
+      if (list2.length > 1) return NextResponse.json({ error: "More than one account has that ID number." }, { status: 400 });
+      np = list2[0];
+      if (np.role === "admin" || np.role === "super_admin") {
+        return NextResponse.json({ error: "That is an admin account. Type 0 to place them directly under you." }, { status: 400 });
+      }
+      if (np.id === id) return NextResponse.json({ error: "A vendor cannot be under themselves." }, { status: 400 });
+      // The new upline must not be someone who is already below this vendor.
+      let cur: string | null = np.id;
+      let guard = 0;
+      while (cur && guard < 30) {
+        if (cur === id) {
+          return NextResponse.json(
+            { error: "That vendor is already under this account, so it cannot become their upline." },
+            { status: 400 }
+          );
+        }
+        cur = pOf.get(cur) || null;
+        guard++;
+      }
+    }
+    const oldParentId: string | null = target.parent_vendor_id || null;
+    if ((np ? np.id : null) === oldParentId) {
+      return NextResponse.json({ error: "They are already under that upline." }, { status: 400 });
+    }
+
+    // Count everyone who moves along with this vendor.
+    let moving = 0;
+    const seen = new Set<string>([id]);
+    const queue: string[] = [id];
+    while (queue.length) {
+      const cur = queue.shift() as string;
+      (kidsOf.get(cur) || []).forEach((k) => {
+        if (!seen.has(k)) {
+          seen.add(k);
+          moving++;
+          queue.push(k);
+        }
+      });
+    }
+    const newLevel = np ? levelOf(np.id, pOf) + 1 : 1;
+
+    if (body.action === "preview_move") {
+      let oldName = "";
+      if (oldParentId) {
+        const { data: op } = await admin.from("profiles").select("full_name, vendor_id").eq("id", oldParentId).maybeSingle();
+        oldName = op ? (op.full_name || "No name") + " (ID " + op.vendor_id + ")" : "Unknown";
+      }
+      return NextResponse.json({
+        ok: true,
+        preview: {
+          name: target.full_name,
+          vendor_id: target.vendor_id,
+          from: oldParentId ? oldName : "Direct from you (no upline)",
+          to: np ? (np.full_name || "No name") + " (ID " + np.vendor_id + ")" : "Direct from you (no upline)",
+          new_level: newLevel,
+          moving_with: moving,
+          to_blocked: !!(np && np.blocked),
+        },
+      });
+    }
+
+    const { error: mErr } = await admin
+      .from("profiles")
+      .update({ parent_vendor_id: np ? np.id : null })
+      .eq("id", id);
+    if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+    try {
+      await admin.from("account_moves").insert({
+        vendor_id: id,
+        old_parent: oldParentId,
+        new_parent: np ? np.id : null,
+        moved_by: u.user.id,
+        reason: String(body.reason || "").trim().slice(0, 200) || null,
+      });
+    } catch (e) {
+      // The move itself succeeded; the history note is best effort.
+    }
+    return NextResponse.json({ ok: true, new_level: newLevel, moving_with: moving });
+  }
+
   // ---- Block or unblock ----
   if (body.action === "block" || body.action === "unblock") {
     const id = String(body.userId || "");
