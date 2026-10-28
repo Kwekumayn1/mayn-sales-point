@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import MovePanel from "./move-panel";
 
 const money = (n: number) => "GHS " + Number(n || 0).toFixed(2);
 
@@ -12,6 +13,7 @@ export default function AccountsPage() {
   const [busyId, setBusyId] = useState("");
   const [openId, setOpenId] = useState("");
   const [error, setError] = useState("");
+  const [moveId, setMoveId] = useState("");
 
   async function call(payload: any) {
     const res = await fetch("/api/admin/accounts", {
@@ -145,6 +147,14 @@ export default function AccountsPage() {
                 </button>
                 {!isAdmin && (
                   <button
+                    onClick={() => setMoveId(moveId === a.id ? "" : a.id)}
+                    className="rounded-pill border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink"
+                  >
+                    {moveId === a.id ? "Close move" : "Move to another upline"}
+                  </button>
+                )}
+                {!isAdmin && (
+                  <button
                     onClick={() => toggleBlock(a)}
                     disabled={busyId === a.id}
                     className={
@@ -156,6 +166,18 @@ export default function AccountsPage() {
                   </button>
                 )}
               </div>
+
+              {moveId === a.id && (
+                <MovePanel
+                  account={a}
+                  call={call}
+                  onDone={(lvl: number) => {
+                    setMoveId("");
+                    void search(q, onlyBlocked);
+                    window.alert((a.full_name || "The vendor") + " has been moved. They are now Level " + lvl + ".");
+                  }}
+                />
+              )}
 
               {open && (
                 <div className="mt-3 rounded-xl bg-paper p-3 text-sm text-ink">
