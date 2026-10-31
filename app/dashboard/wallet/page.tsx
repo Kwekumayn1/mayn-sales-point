@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import TopupBox from "./topup-box";
+import InstantBox from "./instant-box";
 import WithdrawBox from "./withdraw-box";
 
 const CEDI = "GHS ";
@@ -14,6 +15,7 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [topups, setTopups] = useState<any[]>([]);
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [method, setMethod] = useState("instant");
 
   useEffect(() => {
     void load();
@@ -87,7 +89,29 @@ export default function WalletPage() {
         </div>
       </div>
 
-      <TopupBox topups={topups} onChange={load} />
+      <div className="mt-8 flex gap-2">
+        <button
+          onClick={() => setMethod("instant")}
+          className={
+            "rounded-pill px-4 py-2 text-sm font-medium " +
+            (method === "instant" ? "bg-indigo text-white" : "border border-line bg-white text-ink")
+          }
+        >
+          Load instantly
+        </button>
+        <button
+          onClick={() => setMethod("manual")}
+          className={
+            "rounded-pill px-4 py-2 text-sm font-medium " +
+            (method === "manual" ? "bg-indigo text-white" : "border border-line bg-white text-ink")
+          }
+        >
+          Send to admin manually
+        </button>
+      </div>
+      <div className="mt-4">
+        {method === "instant" ? <InstantBox onChange={load} /> : <TopupBox topups={topups} onChange={load} />}
+      </div>
       <WithdrawBox withdrawals={withdrawals} onChange={load} />
 
       <div className="mt-8">
