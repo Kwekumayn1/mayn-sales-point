@@ -23,6 +23,17 @@ function badge(s: string): string {
   return "bg-gray-100 text-gray-700";
 }
 
+function delivery(r: any): any {
+  const s = String(r.supplier_status || "");
+  if (!s) return null;
+  if (s === "sending") return { text: "Sending to the network...", cls: "text-ink/60" };
+  if (s === "sent") return { text: "Sent. Waiting for the network to confirm.", cls: "text-blue-700" };
+  if (s === "completed") return { text: "Network confirmed delivery.", cls: "text-green-700" };
+  if (s === "failed") return { text: "Delivery failed. The admin is looking into it.", cls: "text-red-700" };
+  if (s === "review") return { text: "Needs a check by the admin.", cls: "text-amber-700" };
+  return null;
+}
+
 function when(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-GB", {
@@ -44,17 +55,37 @@ export default function MyOrdersPage() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function loadRows() {
     const supabase: any = createClient();
-    (async () => {
-      const { data, error } = await supabase.rpc("my_orders", { p_limit: 300 });
-      setLoading(false);
-      if (error) {
-        setErr(error.message);
-        return;
-      }
-      setRows(data || []);
-    })();
+    const { data, error } = await supabase.rpc("my_orders", { p_limit: 300 });
+    setLoading(false);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    setRows(data || []);
+  }
+
+  async function syncAndReload() {
+    setRefreshing(true);
+    try {
+      await fetch("/api/orders/sync", { method: "POST" });
+    } catch (e) {
+      // Show what we already have.
+    }
+    await loadRows();
+    setRefreshing(false);
+  }
+
+  useEffect(() => {
+    void loadRows().then(() => syncAndReload());
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void syncAndReload();
+    }, 60000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const q = search.trim().toLowerCase();
@@ -78,8 +109,15 @@ export default function MyOrdersPage() {
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-6">
       <h1 className="text-2xl text-indigo">My Orders</h1>
       <p className="mt-1 text-sm text-ink/60">
-        Orders placed through your account. The status is updated by the admin.
+        Orders placed through your account. Delivery updates come from the network and refresh by themselves.
       </p>
+      <button
+        onClick={() => void syncAndReload()}
+        disabled={refreshing}
+        className="mt-2 rounded-pill border border-line bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+      >
+        {refreshing ? "Checking..." : "Refresh now"}
+      </button>
 
       <input
         value={search}
@@ -128,6 +166,12 @@ export default function MyOrdersPage() {
               {r.phone ? <span>To: {r.phone}</span> : null}
               <span>GH&#8373; {Number(r.price).toFixed(2)}</span>
             </div>
+            {delivery(r) && (
+              <div className={"mt-1 text-xs font-medium " + delivery(r).cls}>
+                Delivery: {delivery(r).text}
+                {r.supplier_sent_at ? " (sent " + when(r.supplier_sent_at) + ")" : ""}
+              </div>
+            )}
           </div>
         ))}
         {!loading && shown.length === 0 && !err && (
