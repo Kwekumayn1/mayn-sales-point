@@ -15,35 +15,6 @@ type Campaign = {
   created_at: string;
 };
 
-const GSM7_BASIC =
-  "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
-const GSM7_EXTENDED = "^{}\\[~]|€\f";
-
-function countParts(text: string): number {
-  if (text.length === 0) return 0;
-  let gsmLength = 0;
-  let isGsm = true;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text.charAt(i);
-    if (GSM7_BASIC.indexOf(ch) !== -1) gsmLength += 1;
-    else if (GSM7_EXTENDED.indexOf(ch) !== -1) gsmLength += 2;
-    else {
-      isGsm = false;
-      break;
-    }
-  }
-  if (isGsm) return gsmLength <= 160 ? 1 : Math.ceil(gsmLength / 153);
-  return text.length <= 70 ? 1 : Math.ceil(text.length / 67);
-}
-
-function isUnicodeText(text: string): boolean {
-  for (let i = 0; i < text.length; i++) {
-    const ch = text.charAt(i);
-    if (GSM7_BASIC.indexOf(ch) === -1 && GSM7_EXTENDED.indexOf(ch) === -1) return true;
-  }
-  return false;
-}
-
 const card = "rounded-2xl border border-line bg-white p-5";
 const input = "w-full rounded-xl border border-line bg-white px-3 py-3 text-sm";
 const button =
@@ -59,7 +30,10 @@ export default function SmsPage() {
   const [totalAll, setTotalAll] = useState(0);
   const [search, setSearch] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [message, setMessage] = useState("");
+  const [preview, setPreview] = useState("");
+  const [parts, setParts] = useState(0);
+  const [previewError, setPreviewError] = useState("");
+  const [previewLoaded, setPreviewLoaded] = useState(false);
   const [oneName, setOneName] = useState("");
   const [onePhone, setOnePhone] = useState("");
   const [manyText, setManyText] = useState("");
@@ -104,6 +78,27 @@ export default function SmsPage() {
     setTotalAll(typeof count === "number" ? count : 0);
   }, [supabase]);
 
+  const loadPreview = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sms/send", { cache: "no-store" });
+      const json: any = await res.json().catch(() => null);
+      if (json && json.ok) {
+        setPreview(String(json.preview));
+        setParts(Number(json.parts) || 1);
+        setPreviewError("");
+      } else {
+        setPreview("");
+        setParts(0);
+        setPreviewError((json && json.error) || "Could not load the message.");
+      }
+    } catch {
+      setPreview("");
+      setParts(0);
+      setPreviewError("Could not load the message. Check your connection.");
+    }
+    setPreviewLoaded(true);
+  }, []);
+
   const loadContacts = useCallback(
     async (term: string) => {
       let q = supabase
@@ -144,7 +139,8 @@ export default function SmsPage() {
     void loadBalances();
     void loadCampaigns();
     void loadTotal();
-  }, [supabase, loadBalances, loadCampaigns, loadTotal]);
+    void loadPreview();
+  }, [supabase, loadBalances, loadCampaigns, loadTotal, loadPreview]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -228,13 +224,12 @@ export default function SmsPage() {
     await loadContacts(search);
   }
 
-  const parts = countParts(message);
   const cost = parts * totalAll;
   const tooFew = cost > units;
 
   async function send() {
-    if (!message.trim()) {
-      setNotice({ ok: false, text: "Write a message first." });
+    if (!preview) {
+      setNotice({ ok: false, text: previewError || "The message is not ready." });
       return;
     }
     if (totalAll === 0) {
@@ -254,11 +249,7 @@ export default function SmsPage() {
     setBusy("send");
     setNotice(null);
     try {
-      const res = await fetch("/api/sms/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
+      const res = await fetch("/api/sms/send", { method: "POST" });
       const json: any = await res.json().catch(() => null);
       if (!res.ok || !json || !json.ok) {
         setNotice({ ok: false, text: (json && json.error) || "Could not send. Try again." });
@@ -274,7 +265,6 @@ export default function SmsPage() {
             (json.failed > 0 ? ". Not sent: " + json.failed + " (refunded)" : "") +
             ".",
         });
-        setMessage("");
       }
     } catch {
       setNotice({ ok: false, text: "Network problem. Check your connection and try again." });
@@ -333,23 +323,27 @@ export default function SmsPage() {
       </section>
 
       <section className={card + " mt-6"}>
-        <h2 className="font-display text-lg text-indigo">Send a message</h2>
+        <h2 className="font-display text-lg text-indigo">Send our advert to your contacts</h2>
         <p className="mt-1 text-xs text-ink/50">
-          Goes to all {totalAll.toLocaleString()} of your contacts. Messages are sent under the sender name
-          MaynBrand.
+          To keep the platform safe, only this approved message can be sent. It goes to all{" "}
+          {totalAll.toLocaleString()} of your contacts and carries your own store link.
         </p>
-        <textarea
-          className={input + " mt-3 min-h-[120px]"}
-          placeholder="Type your message here"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
-        <p className="mt-2 text-xs text-ink/60">
-          {message.length} characters, {parts} SMS part(s) per contact
-          {isUnicodeText(message) ? " (special symbols like \u20B5 or emoji make each part shorter)" : ""}.
-          {" "}Cost: {cost.toLocaleString()} units.
-        </p>
-        {tooFew && message.length > 0 && (
+
+        {!previewLoaded && <p className="mt-3 text-sm text-ink/50">Loading message...</p>}
+        {previewLoaded && previewError && (
+          <div className="mt-3 rounded-xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
+            {previewError}
+          </div>
+        )}
+        {preview && (
+          <div className="mt-3 rounded-xl border border-line bg-paper px-4 py-3 text-sm">{preview}</div>
+        )}
+        {preview && (
+          <p className="mt-2 text-xs text-ink/60">
+            {parts} SMS part(s) per contact. Cost: {cost.toLocaleString()} units.
+          </p>
+        )}
+        {preview && tooFew && totalAll > 0 && (
           <p className="mt-1 text-xs text-red-700">
             You need {cost.toLocaleString()} units but have {units.toLocaleString()}. Buy more above.
           </p>
@@ -357,7 +351,7 @@ export default function SmsPage() {
         <button
           className={button + " mt-3 w-full"}
           onClick={send}
-          disabled={busy !== "" || message.trim().length === 0 || totalAll === 0 || tooFew}
+          disabled={busy !== "" || !preview || totalAll === 0 || tooFew}
         >
           {busy === "send" ? "Sending..." : "Send SMS"}
         </button>
