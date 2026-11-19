@@ -18,6 +18,7 @@ const VENDOR_ITEMS: Item[] = [
   { href: "/dashboard/my-orders", label: "My Orders" },
   { href: "/dashboard/wallet", label: "My Wallet" },
   { href: "/dashboard/wallet-order", label: "Buy for Customer" },
+  { href: "/dashboard/sms", label: "SMS Marketing" },
   { href: "/dashboard/affiliates", label: "My Affiliates" },
   { href: "/dashboard/sub-vendors", label: "My Sub-vendors" },
 ];
