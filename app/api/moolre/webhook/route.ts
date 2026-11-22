@@ -37,6 +37,15 @@ export async function POST(request: Request) {
     }
   }
 
+  // Moolre test events and failed attempts carry nothing to act on.
+  // Answer 200 so Moolre does not keep retrying them. The order stays pending.
+  if (payload && payload.event === "webhook.test") {
+    return NextResponse.json({ ok: true, note: "Test received." });
+  }
+  if (payload && payload.event === "payment.failed") {
+    return NextResponse.json({ ok: true, note: "Failure noted. Order stays pending." });
+  }
+
   const reference = pickReference(payload);
   console.log("moolre webhook arrived, reference:", reference || "(none)", JSON.stringify(payload).slice(0, 500));
 
