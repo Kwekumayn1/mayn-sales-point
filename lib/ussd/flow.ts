@@ -1,4 +1,8 @@
 import { initiateMoolrePayment } from "@/lib/payments/moolre";
+import {
+  requestMoolrePrompt,
+  channelForNumber,
+} from "@/lib/payments/moolre-prompt";
 import type { Item, Step } from "@/lib/ussd/core";
 import {
   MAX_ORDERS_PER_HOUR,
@@ -24,6 +28,31 @@ function servicesText(cats: { label: string }[]): string {
 }
 const RECIPIENT_TEXT = "Recipient\n1 Myself\n2 Other Number\n0 Back";
 const OTHER_TEXT = "Enter recipient number\n(e.g. 0241234567)\n0 Back";
+const OTP_TEXT = "Enter the code sent to you by SMS to verify your number:\n0 Cancel";
+const UNCERTAIN_TEXT =
+  "We could not confirm your payment request. If a prompt appears, approve it. Otherwise check Order Status shortly.";
+
+function promptSentText(orderNumber: string, amount: number): string {
+  return (
+    "Order " +
+    orderNumber +
+    ": approve the GHS " +
+    amount.toFixed(2) +
+    " payment prompt on your phone with your PIN."
+  );
+}
+
+async function cancelPending(admin: any, orderNumber: string) {
+  try {
+    await admin
+      .from("orders")
+      .delete()
+      .eq("order_number", orderNumber)
+      .eq("status", "pending_payment");
+  } catch {
+    // nothing more to do
+  }
+}
 
 // ---------------------------------------------------------------
 // Placing the order
@@ -82,18 +111,7 @@ async function placeOrder(
   }
   const orderNumber = String(row.order_number);
   const amount = Number(row.unit_price);
-
-  const cleanup = async () => {
-    try {
-      await admin
-        .from("orders")
-        .delete()
-        .eq("order_number", orderNumber)
-        .eq("status", "pending_payment");
-    } catch {
-      // nothing more to do
-    }
-  };
+  const cleanup = () => cancelPending(admin, orderNumber);
 
   // The price must still be what the customer confirmed
   if (Math.abs(amount - item.price) >= 0.005) {
@@ -108,6 +126,35 @@ async function placeOrder(
     session_id: sessionId,
   });
 
+  // 1) Preferred: a direct Mobile Money prompt on the buyer's phone
+  const payer = localPhone(msisdn);
+  const channel = payer ? channelForNumber(payer) : null;
+  if (payer && channel) {
+    const r = await requestMoolrePrompt({
+      channel,
+      payer,
+      amount: amount.toFixed(2),
+      externalref: orderNumber,
+    });
+    if (r.kind === "sent") return done(promptSentText(orderNumber, amount));
+    if (r.kind === "otp") {
+      return {
+        message: OTP_TEXT,
+        end: false,
+        state: "otp",
+        data: {
+          ...data,
+          pending: { orderNumber, amount, payer, channel },
+          last: OTP_TEXT,
+        },
+      };
+    }
+    if (r.kind === "uncertain") return done(UNCERTAIN_TEXT);
+    console.error("USSD payment prompt refused:", r.message);
+    // fall through to the SMS payment link below
+  }
+
+  // 2) Fallback: text a payment link
   let payUrl = "";
   try {
     const r = await initiateMoolrePayment({
@@ -288,6 +335,31 @@ export async function advance(
     if (n === 2) return done("Order cancelled.");
     if (n === 1) return await placeOrder(admin, data, msisdn, sessionId);
     return invalid();
+  }
+
+  if (state === "otp") {
+    const pending = data.pending;
+    if (!pending) return done("Session expired. Please dial again.");
+    if (input === "0") {
+      await cancelPending(admin, String(pending.orderNumber));
+      return done("Order cancelled.");
+    }
+    if (!/^[0-9]{3,8}$/.test(input)) return invalid("Enter the code from the SMS.");
+    const r = await requestMoolrePrompt({
+      channel: String(pending.channel),
+      payer: String(pending.payer),
+      amount: Number(pending.amount).toFixed(2),
+      externalref: String(pending.orderNumber),
+      otpcode: input,
+    });
+    if (r.kind === "sent") {
+      return done(promptSentText(String(pending.orderNumber), Number(pending.amount)));
+    }
+    if (r.kind === "otp") return invalid("Wrong code. Try again.");
+    if (r.kind === "uncertain") return done(UNCERTAIN_TEXT);
+    console.error("USSD OTP step refused:", r.message);
+    await cancelPending(admin, String(pending.orderNumber));
+    return done("Could not send the payment request. Please try again later.");
   }
 
   // Unknown state: start again
