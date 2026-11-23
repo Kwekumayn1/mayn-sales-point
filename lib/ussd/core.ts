@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendSms as sendSmsViaProviders } from "@/lib/sms/provider";
 
 export const PAGE_SIZE = 5;
 export const MAX_ORDERS_PER_HOUR = 5;
-const SMS_URL = "https://src-sms.muviin.co/api/v1/sms/send";
 
 export type Item = {
   kind: "variant" | "product";
@@ -214,8 +214,10 @@ export async function renderPackages(admin: any, data: any, page: number) {
   const p = Math.min(Math.max(page, 1), pages);
   const slice = items.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
   const hasMore = p < pages;
+  // "1GB" is shown as "1", "2GB" as "2", "1.5GB" as "1.5"
   const lines = slice.map(
-    (it, i) => i + 1 + " " + it.label + " " + it.price.toFixed(2)
+    (it, i) =>
+      i + 1 + " " + it.label.replace(/(\d+(?:\.\d+)?)\s*gb\b/gi, "$1") + " " + it.price.toFixed(2)
   );
   const text =
     "Select package\n" + lines.join("\n") + "\n" + (hasMore ? "0 More" : "0 Back");
@@ -262,36 +264,15 @@ export async function orderStatusText(
   return lines.length > 0 ? "Your recent orders\n" + lines.join("\n") : none;
 }
 
+// Sends through the SMS providers (Moolre first, MaynData as backup,
+// in the order the admin chose on the SMS provider page)
 export async function sendSms(
   phone: string,
   message: string,
   ref: string
 ): Promise<boolean> {
-  const apiKey = process.env.MAYNDATA_API_KEY;
-  const senderId = process.env.MAYNDATA_SENDER_ID || "MaynBrand";
-  if (!apiKey || !phone) return false;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 6000);
-  try {
-    const res = await fetch(SMS_URL, {
-      method: "POST",
-      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        senderid: senderId,
-        messages: [{ recipient: phone, message, ref }],
-      }),
-      signal: controller.signal,
-    });
-    const json: any = await res.json().catch(() => null);
-    if (!res.ok || !json || json.status !== "success") return false;
-    return (
-      Number(json.data?.accepted ?? 0) + Number(json.data?.duplicates ?? 0) > 0
-    );
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
+  if (!phone) return false;
+  return await sendSmsViaProviders(phone, message, ref);
 }
 
 // END OF FILE
