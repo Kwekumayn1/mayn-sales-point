@@ -39,6 +39,7 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/wallets", label: "Wallet top-ups" },
   { href: "/dashboard/admin/withdrawals", label: "Withdrawals" },
   { href: "/dashboard/admin/sms-prices", label: "SMS prices" },
+  { href: "/dashboard/admin/sms-provider", label: "SMS provider" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
