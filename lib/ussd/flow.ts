@@ -347,12 +347,14 @@ export async function advance(
       return done("Order cancelled.");
     }
     if (!/^[0-9]{3,8}$/.test(input)) return invalid("Enter the code from the SMS.");
-    const r = await requestMoolrePrompt({
+        const r = await requestMoolrePrompt({
       channel: String(pending.channel),
       payer: String(pending.payer),
       amount: Number(pending.amount).toFixed(2),
       externalref: String(pending.orderNumber),
       otpcode: input,
+      sessionid: sessionId,
+    });
     });
     if (r.kind === "sent") {
       return done(promptSentText(String(pending.orderNumber), Number(pending.amount)));
