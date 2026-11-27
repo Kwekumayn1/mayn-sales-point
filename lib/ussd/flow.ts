@@ -130,11 +130,13 @@ async function placeOrder(
   const payer = localPhone(msisdn);
   const channel = payer ? channelForNumber(payer) : null;
   if (payer && channel) {
-    const r = await requestMoolrePrompt({
+        const r = await requestMoolrePrompt({
       channel,
       payer,
       amount: amount.toFixed(2),
       externalref: orderNumber,
+      sessionid: sessionId,
+    });
     });
     if (r.kind === "sent") return done(promptSentText(orderNumber, amount));
     if (r.kind === "otp") {
