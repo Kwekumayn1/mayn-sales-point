@@ -28,6 +28,7 @@ export async function requestMoolrePrompt(params: {
   amount: string; // e.g. "5.99"
   externalref: string; // must be unique
   otpcode?: string;
+  sessionid?: string; // Uzo USSD session ID, sent only when the switch is on
 }): Promise<PromptResult> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (process.env.MOOLRE_API_USER) headers["X-API-USER"] = process.env.MOOLRE_API_USER;
@@ -43,6 +44,11 @@ export async function requestMoolrePrompt(params: {
     accountnumber: process.env.MOOLRE_ACCOUNT_NUMBER,
   };
   if (params.otpcode) body.otpcode = params.otpcode;
+
+  // The switch: only when MOOLRE_SEND_SESSIONID is exactly "true"
+  const sendSession =
+    process.env.MOOLRE_SEND_SESSIONID === "true" && !!params.sessionid;
+  if (sendSession) body.sessionid = params.sessionid;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
@@ -79,8 +85,18 @@ export async function requestMoolrePrompt(params: {
     : String(json.message ?? "");
 
   // "Please complete the verification process sent to you via SMS"
-  if (/verif|otp/i.test(message)) return { kind: "otp" };
-  if (String(json.status) === "1") return { kind: "sent" };
+  if (/verif|otp/i.test(message)) {
+    console.log("Moolre prompt: code requested", { sessionidSent: sendSession });
+    return { kind: "otp" };
+  }
+  if (String(json.status) === "1") {
+    console.log("Moolre prompt: sent", {
+      sessionidSent: sendSession,
+      withCode: !!params.otpcode,
+    });
+    return { kind: "sent" };
+  }
+  console.log("Moolre prompt: refused", { sessionidSent: sendSession, message });
   return { kind: "error", message: message || "Request refused (status " + httpStatus + ")" };
 }
 
