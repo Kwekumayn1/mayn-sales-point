@@ -5,10 +5,14 @@ import {
   reply,
   getAdmin,
   normalizePhone,
-  extractExtension,
   lookupVendor,
 } from "@/lib/ussd/core";
 import { advance, menuText } from "@/lib/ussd/flow";
+import {
+  UNAVAILABLE_TEXT,
+  extractVendorKey,
+  chargeSession,
+} from "@/lib/ussd/billing";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -64,16 +68,21 @@ export async function POST(request: Request) {
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         await admin.from("ussd_sessions").delete().lt("updated_at", cutoff);
       }
-      const ext = extractExtension(body);
-      const vendor = ext ? await lookupVendor(admin, ext) : null;
+      const key = extractVendorKey(body);
+      const vendor = key ? await lookupVendor(admin, key) : null;
       if (vendor) {
-        const text = menuText(vendor.name);
-        step = {
-          message: text,
-          end: false,
-          state: "menu",
-          data: { vendorId: vendor.id, vendorName: vendor.name, last: text },
-        };
+        const ok = await chargeSession(admin, vendor.id, sessionId);
+        if (!ok) {
+          step = { message: UNAVAILABLE_TEXT, end: true, state: "done", data: {} };
+        } else {
+          const text = menuText(vendor.name);
+          step = {
+            message: text,
+            end: false,
+            state: "menu",
+            data: { vendorId: vendor.id, vendorName: vendor.name, last: text },
+          };
+        }
       } else {
         const text = "Mayn Sales Point\nEnter vendor code:";
         step = { message: text, end: false, state: "code", data: { last: text } };
