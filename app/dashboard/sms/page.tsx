@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Pkg = { id: string; price: number; units: number };
 type Contact = { id: string; phone: string; name: string | null; source: string };
+type Tpl = { id: string; title: string; preview: string; parts: number };
 type Campaign = {
   id: string;
   message: string;
@@ -30,10 +31,10 @@ export default function SmsPage() {
   const [totalAll, setTotalAll] = useState(0);
   const [search, setSearch] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [preview, setPreview] = useState("");
-  const [parts, setParts] = useState(0);
-  const [previewError, setPreviewError] = useState("");
-  const [previewLoaded, setPreviewLoaded] = useState(false);
+  const [templates, setTemplates] = useState<Tpl[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [templatesError, setTemplatesError] = useState("");
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [oneName, setOneName] = useState("");
   const [onePhone, setOnePhone] = useState("");
   const [manyText, setManyText] = useState("");
@@ -78,25 +79,28 @@ export default function SmsPage() {
     setTotalAll(typeof count === "number" ? count : 0);
   }, [supabase]);
 
-  const loadPreview = useCallback(async () => {
+  const loadTemplates = useCallback(async () => {
     try {
       const res = await fetch("/api/sms/send", { cache: "no-store" });
       const json: any = await res.json().catch(() => null);
-      if (json && json.ok) {
-        setPreview(String(json.preview));
-        setParts(Number(json.parts) || 1);
-        setPreviewError("");
+      if (json && json.ok && Array.isArray(json.templates)) {
+        const list = json.templates as Tpl[];
+        setTemplates(list);
+        setSelectedId((cur) =>
+          list.some((t) => t.id === cur) ? cur : list.length > 0 ? list[0].id : ""
+        );
+        setTemplatesError("");
       } else {
-        setPreview("");
-        setParts(0);
-        setPreviewError((json && json.error) || "Could not load the message.");
+        setTemplates([]);
+        setSelectedId("");
+        setTemplatesError((json && json.error) || "Could not load the messages.");
       }
     } catch {
-      setPreview("");
-      setParts(0);
-      setPreviewError("Could not load the message. Check your connection.");
+      setTemplates([]);
+      setSelectedId("");
+      setTemplatesError("Could not load the messages. Check your connection.");
     }
-    setPreviewLoaded(true);
+    setTemplatesLoaded(true);
   }, []);
 
   const loadContacts = useCallback(
@@ -127,6 +131,7 @@ export default function SmsPage() {
       const { data } = await supabase
         .from("sms_packages")
         .select("id, price, units")
+        .eq("active", true)
         .order("price", { ascending: true });
       setPackages(
         ((data ?? []) as any[]).map((p) => ({
@@ -139,8 +144,8 @@ export default function SmsPage() {
     void loadBalances();
     void loadCampaigns();
     void loadTotal();
-    void loadPreview();
-  }, [supabase, loadBalances, loadCampaigns, loadTotal, loadPreview]);
+    void loadTemplates();
+  }, [supabase, loadBalances, loadCampaigns, loadTotal, loadTemplates]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -224,12 +229,14 @@ export default function SmsPage() {
     await loadContacts(search);
   }
 
+  const selected = templates.find((t) => t.id === selectedId) || null;
+  const parts = selected ? selected.parts : 0;
   const cost = parts * totalAll;
   const tooFew = cost > units;
 
   async function send() {
-    if (!preview) {
-      setNotice({ ok: false, text: previewError || "The message is not ready." });
+    if (!selected) {
+      setNotice({ ok: false, text: templatesError || "Choose a message first." });
       return;
     }
     if (totalAll === 0) {
@@ -249,10 +256,15 @@ export default function SmsPage() {
     setBusy("send");
     setNotice(null);
     try {
-      const res = await fetch("/api/sms/send", { method: "POST" });
+      const res = await fetch("/api/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ templateId: selected.id }),
+      });
       const json: any = await res.json().catch(() => null);
       if (!res.ok || !json || !json.ok) {
         setNotice({ ok: false, text: (json && json.error) || "Could not send. Try again." });
+        if (res.status === 400) await loadTemplates();
       } else {
         setNotice({
           ok: true,
@@ -323,27 +335,47 @@ export default function SmsPage() {
       </section>
 
       <section className={card + " mt-6"}>
-        <h2 className="font-display text-lg text-indigo">Send our advert to your contacts</h2>
+        <h2 className="font-display text-lg text-indigo">Send an approved message</h2>
         <p className="mt-1 text-xs text-ink/50">
-          To keep the platform safe, only this approved message can be sent. It goes to all{" "}
+          To keep the platform safe, only these approved messages can be sent. Choose one. It goes to all{" "}
           {totalAll.toLocaleString()} of your contacts and carries your own store link.
         </p>
 
-        {!previewLoaded && <p className="mt-3 text-sm text-ink/50">Loading message...</p>}
-        {previewLoaded && previewError && (
+        {!templatesLoaded && <p className="mt-3 text-sm text-ink/50">Loading messages...</p>}
+        {templatesLoaded && templatesError && (
           <div className="mt-3 rounded-xl bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
-            {previewError}
+            {templatesError}
           </div>
         )}
-        {preview && (
-          <div className="mt-3 rounded-xl border border-line bg-paper px-4 py-3 text-sm">{preview}</div>
-        )}
-        {preview && (
-          <p className="mt-2 text-xs text-ink/60">
-            {parts} SMS part(s) per contact. Cost: {cost.toLocaleString()} units.
+
+        {templates.map((t) => (
+          <label
+            key={t.id}
+            className={
+              "mt-3 block cursor-pointer rounded-xl border p-3 " +
+              (selectedId === t.id ? "border-indigo bg-paper" : "border-line")
+            }
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="template"
+                checked={selectedId === t.id}
+                onChange={() => setSelectedId(t.id)}
+              />
+              <span className="text-sm font-semibold">{t.title}</span>
+            </div>
+            <div className="mt-2 text-sm">{t.preview}</div>
+            <div className="mt-1 text-xs text-ink/50">{t.parts} SMS part(s) per contact</div>
+          </label>
+        ))}
+
+        {selected && (
+          <p className="mt-3 text-xs text-ink/60">
+            Cost: {cost.toLocaleString()} units for {totalAll.toLocaleString()} contact(s).
           </p>
         )}
-        {preview && tooFew && totalAll > 0 && (
+        {selected && tooFew && totalAll > 0 && (
           <p className="mt-1 text-xs text-red-700">
             You need {cost.toLocaleString()} units but have {units.toLocaleString()}. Buy more above.
           </p>
@@ -351,7 +383,7 @@ export default function SmsPage() {
         <button
           className={button + " mt-3 w-full"}
           onClick={send}
-          disabled={busy !== "" || !preview || totalAll === 0 || tooFew}
+          disabled={busy !== "" || !selected || totalAll === 0 || tooFew}
         >
           {busy === "send" ? "Sending..." : "Send SMS"}
         </button>
