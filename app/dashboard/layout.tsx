@@ -19,6 +19,7 @@ const VENDOR_ITEMS: Item[] = [
   { href: "/dashboard/wallet", label: "My Wallet" },
   { href: "/dashboard/wallet-order", label: "Buy for Customer" },
   { href: "/dashboard/sms", label: "SMS Marketing" },
+  { href: "/dashboard/ussd", label: "My USSD" },
   { href: "/dashboard/affiliates", label: "My Affiliates" },
   { href: "/dashboard/sub-vendors", label: "My Sub-vendors" },
 ];
@@ -40,6 +41,7 @@ const ADMIN_ITEMS: Item[] = [
   { href: "/dashboard/admin/withdrawals", label: "Withdrawals" },
   { href: "/dashboard/admin/sms-prices", label: "SMS prices" },
   { href: "/dashboard/admin/sms-provider", label: "SMS provider" },
+  { href: "/dashboard/admin/ussd-prices", label: "USSD prices" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
