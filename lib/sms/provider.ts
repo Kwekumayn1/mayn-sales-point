@@ -72,14 +72,29 @@ function toLocal(recipient: string): string {
   return d;
 }
 
-// Moolre is used only for plain (GSM) messages up to 160 characters
-function moolreSuitable(message: string): boolean {
-  if (!process.env.MOOLRE_VAS_KEY || !process.env.MOOLRE_SMS_SENDER) return false;
-  if (message.length === 0 || message.length > 160) return false;
-  for (let i = 0; i < message.length; i++) {
-    if (GSM7_BASIC.indexOf(message.charAt(i)) === -1) return false;
+// Says exactly why Moolre cannot be used ("" means it can be used)
+function moolreProblem(message: string): string {
+  if (!process.env.MOOLRE_VAS_KEY) {
+    return "MOOLRE_VAS_KEY is not set in this deployment";
   }
-  return true;
+  if (!process.env.MOOLRE_SMS_SENDER) {
+    return "MOOLRE_SMS_SENDER is not set in this deployment";
+  }
+  if (message.length === 0) return "the message is empty";
+  if (message.length > 160) {
+    return "the message is " + message.length + " characters (the limit is 160)";
+  }
+  for (let i = 0; i < message.length; i++) {
+    if (GSM7_BASIC.indexOf(message.charAt(i)) === -1) {
+      return (
+        "the message has a special character (code " +
+        message.charCodeAt(i) +
+        ") at position " +
+        (i + 1)
+      );
+    }
+  }
+  return "";
 }
 
 // ---------------------------------------------------------------
@@ -238,8 +253,10 @@ export async function sendBatch(
   let lastError = "No SMS provider is available.";
   for (const p of order) {
     if (p === "moolre") {
-      if (!moolreSuitable(message)) {
-        lastError = "This message cannot be sent through Moolre.";
+      const problem = moolreProblem(message);
+      if (problem) {
+        lastError = "Moolre skipped: " + problem;
+        console.error("Moolre skipped:", problem);
         continue;
       }
       const a = await sendViaMoolre(items, message);
@@ -255,7 +272,7 @@ export async function sendBatch(
       if (a.kind === "uncertain") {
         return { ok: false, error: "Delivery could not be confirmed." };
       }
-      lastError = a.error;
+      lastError = "Moolre refused: " + a.error;
       console.error("Moolre SMS refused:", a.error);
       continue;
     }
@@ -265,7 +282,7 @@ export async function sendBatch(
     if (a.kind === "uncertain") {
       return { ok: false, error: "Delivery could not be confirmed." };
     }
-    lastError = a.error;
+    lastError = "MaynData refused: " + a.error;
     console.error("MaynData SMS refused:", a.error);
   }
   return { ok: false, error: lastError };
