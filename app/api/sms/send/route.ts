@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { sendBatch } from "@/lib/sms/provider";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const API_URL = "https://src-sms.muviin.co/api/v1/sms/send";
-const BATCH_SIZE = 5000;
-const DEFAULT_TEMPLATE =
-  "Hi lovely one, buy all your internet services & products from {{link}}";
+const BATCH_SIZE = 500;
 
 const GSM7_BASIC =
   "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
@@ -30,45 +28,6 @@ function countParts(text: string): number {
   return text.length <= 70 ? 1 : Math.ceil(text.length / 67);
 }
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-type SendResult =
-  | { ok: true; data: any }
-  | { ok: false; error: string };
-
-async function postWithRetry(
-  apiKey: string,
-  payload: unknown
-): Promise<SendResult> {
-  let lastError = "Network error";
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "X-API-Key": apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      const json: any = await res.json().catch(() => null);
-      if (res.ok && json && json.status === "success") {
-        return { ok: true, data: json.data };
-      }
-      lastError = json?.data?.error ?? json?.message ?? "HTTP " + res.status;
-      if (res.status === 429 || res.status >= 500) {
-        await sleep(1500 * (attempt + 1));
-        continue;
-      }
-      return { ok: false, error: lastError };
-    } catch {
-      await sleep(1500 * (attempt + 1));
-    }
-  }
-  return { ok: false, error: lastError };
-}
-
 function getAdmin(): any {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -78,17 +37,11 @@ function getAdmin(): any {
   });
 }
 
-// The ONLY message vendors can send: the platform template + their own link.
-async function buildMessage(
-  admin: any,
-  vendorId: string
-): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+// This vendor's own store link (empty when they have not set one)
+async function getVendorLink(admin: any, vendorId: string): Promise<string> {
   const siteRaw = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
   const site = siteRaw.replace(/\/+$/, "");
-  if (!site) {
-    return { ok: false, error: "The site address is not set. Contact the admin." };
-  }
-
+  if (!site) return "";
   const { data: store } = await admin
     .from("storefronts")
     .select("storefront_slug")
@@ -96,32 +49,23 @@ async function buildMessage(
     .maybeSingle();
   const slug =
     store && store.storefront_slug ? String(store.storefront_slug).trim() : "";
-  if (!slug) {
-    return {
-      ok: false,
-      error: "Set your store link name first (menu, My Storefront), then come back.",
-    };
-  }
-
-  const { data: t } = await admin
-    .from("sms_template")
-    .select("body")
-    .eq("id", 1)
-    .maybeSingle();
-  const body = t && t.body ? String(t.body) : DEFAULT_TEMPLATE;
-  if (body.indexOf("{{link}}") === -1) {
-    return { ok: false, error: "The SMS template is not set up correctly. Contact the admin." };
-  }
-
-  const link = site + "/s/" + slug;
-  const message = body.split("{{link}}").join(link).replace(/\s+$/, "");
-  if (countParts(message) > 10) {
-    return { ok: false, error: "The SMS template is too long. Contact the admin." };
-  }
-  return { ok: true, message };
+  return slug ? site + "/s/" + slug : "";
 }
 
-// Preview shown on the SMS page
+function fillTemplate(body: string, link: string): string {
+  return body.split("{{link}}").join(link).replace(/\s+$/, "");
+}
+
+async function isBlocked(admin: any, vendorId: string): Promise<boolean> {
+  const { data } = await admin
+    .from("sms_blocked_vendors")
+    .select("vendor_id")
+    .eq("vendor_id", vendorId)
+    .maybeSingle();
+  return !!data;
+}
+
+// The list of approved templates, with this vendor's link filled in
 export async function GET() {
   const supabase = createClient();
   const {
@@ -134,29 +78,46 @@ export async function GET() {
   if (!admin) {
     return NextResponse.json({ ok: false, error: "SMS is not set up yet. Contact the admin." });
   }
-  const { data: blocked } = await admin
-    .from("sms_blocked_vendors")
-    .select("vendor_id")
-    .eq("vendor_id", user.id)
-    .maybeSingle();
-  if (blocked) {
+  if (await isBlocked(admin, user.id)) {
     return NextResponse.json({
       ok: false,
       error: "SMS is switched off for your account. Contact the admin.",
     });
   }
-  const built = await buildMessage(admin, user.id);
-  if (!built.ok) {
-    return NextResponse.json({ ok: false, error: built.error });
+
+  const link = await getVendorLink(admin, user.id);
+  const { data: rows } = await admin
+    .from("sms_templates")
+    .select("id, title, body")
+    .eq("active", true)
+    .order("created_at", { ascending: true });
+
+  const templates: { id: string; title: string; preview: string; parts: number }[] = [];
+  let skippedForLink = false;
+  for (const t of rows ?? []) {
+    const body = String(t.body);
+    if (body.indexOf("{{link}}") !== -1 && !link) {
+      skippedForLink = true;
+      continue;
+    }
+    const message = fillTemplate(body, link);
+    const parts = countParts(message);
+    if (message.length === 0 || parts > 10) continue;
+    templates.push({ id: String(t.id), title: String(t.title), preview: message, parts });
   }
-  return NextResponse.json({
-    ok: true,
-    preview: built.message,
-    parts: countParts(built.message),
-  });
+
+  if (templates.length === 0) {
+    return NextResponse.json({
+      ok: false,
+      error: skippedForLink
+        ? "Set your store link name first (menu, My Storefront), then come back."
+        : "No message templates are available right now. Check again later.",
+    });
+  }
+  return NextResponse.json({ ok: true, templates });
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = createClient();
   const {
     data: { user },
@@ -165,35 +126,64 @@ export async function POST() {
     return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
   }
 
-  const apiKey = process.env.MAYNDATA_API_KEY;
-  const senderId = process.env.MAYNDATA_SENDER_ID || "MaynBrand";
+  const hasMoolre = !!(process.env.MOOLRE_VAS_KEY && process.env.MOOLRE_SMS_SENDER);
+  const hasMayn = !!process.env.MAYNDATA_API_KEY;
   const admin = getAdmin();
-  if (!admin || !apiKey) {
+  if (!admin || (!hasMoolre && !hasMayn)) {
     return NextResponse.json(
       { error: "SMS is not set up yet. Contact the admin." },
       { status: 500 }
     );
   }
 
-  const { data: blocked } = await admin
-    .from("sms_blocked_vendors")
-    .select("vendor_id")
-    .eq("vendor_id", user.id)
-    .maybeSingle();
-  if (blocked) {
+  if (await isBlocked(admin, user.id)) {
     return NextResponse.json(
       { error: "SMS is switched off for your account. Contact the admin." },
       { status: 403 }
     );
   }
 
-  // The message is built here on the server. Nothing from the browser is used.
-  const built = await buildMessage(admin, user.id);
-  if (!built.ok) {
-    return NextResponse.json({ error: built.error }, { status: 400 });
+  // Only the template id comes from the browser. The text is built here.
+  let templateId = "";
+  try {
+    const body: any = await request.json();
+    templateId = typeof body?.templateId === "string" ? body.templateId : "";
+  } catch {
+    templateId = "";
   }
-  const message = built.message;
+  if (!templateId) {
+    return NextResponse.json({ error: "Choose a message first." }, { status: 400 });
+  }
+
+  const { data: tpl } = await admin
+    .from("sms_templates")
+    .select("body")
+    .eq("id", templateId)
+    .eq("active", true)
+    .maybeSingle();
+  if (!tpl || !tpl.body) {
+    return NextResponse.json(
+      { error: "That message is no longer available. Reload the page and choose again." },
+      { status: 400 }
+    );
+  }
+
+  const link = await getVendorLink(admin, user.id);
+  const rawBody = String(tpl.body);
+  if (rawBody.indexOf("{{link}}") !== -1 && !link) {
+    return NextResponse.json(
+      { error: "Set your store link name first (menu, My Storefront), then come back." },
+      { status: 400 }
+    );
+  }
+  const message = fillTemplate(rawBody, link);
   const parts = countParts(message);
+  if (message.length === 0 || parts > 10) {
+    return NextResponse.json(
+      { error: "This message cannot be sent. Contact the admin." },
+      { status: 400 }
+    );
+  }
 
   const phones: string[] = [];
   for (let from = 0; ; from += 1000) {
@@ -237,40 +227,26 @@ export async function POST() {
   let failed = 0;
   const failedRefs: string[] = [];
   const invalidRows: { ref: string; reason: string }[] = [];
+  const providers = new Set<string>();
 
   for (let start = 0; start < phones.length; start += BATCH_SIZE) {
     const slice = phones.slice(start, start + BATCH_SIZE);
-    const payload = {
-      senderid: senderId,
-      messages: slice.map((phone, j) => ({
-        recipient: phone,
-        message,
-        ref: campaignId + ":" + (start + j + 1),
-      })),
-    };
-    const result = await postWithRetry(apiKey, payload);
+    const items = slice.map((phone, j) => ({
+      recipient: phone,
+      ref: campaignId + ":" + (start + j + 1),
+    }));
+    const result = await sendBatch(items, message, parts);
     if (!result.ok) {
-      console.error("MaynData send failed:", result.error);
+      console.error("SMS batch failed:", result.error);
       failed += slice.length;
-      for (let j = 0; j < slice.length; j++) {
-        failedRefs.push(campaignId + ":" + (start + j + 1));
-      }
+      for (const it of items) failedRefs.push(it.ref);
       continue;
     }
-    const d = result.data ?? {};
-    const accepted = Number(d.accepted ?? 0);
-    const duplicates = Number(d.duplicates ?? 0);
-    unitsUsed += Number(d.creditsRequired ?? 0) + duplicates * parts;
-    sent += accepted + duplicates;
-    invalid += Number(d.invalid ?? 0);
-    for (const item of d.invalidMessages ?? []) {
-      if (item && item.ref) {
-        invalidRows.push({
-          ref: String(item.ref),
-          reason: String(item.reason ?? "Invalid number"),
-        });
-      }
-    }
+    providers.add(result.provider);
+    unitsUsed += result.unitsUsed;
+    sent += result.sent;
+    invalid += result.invalid.length;
+    for (const row of result.invalid) invalidRows.push(row);
   }
 
   for (let i = 0; i < failedRefs.length; i += 100) {
@@ -298,6 +274,16 @@ export async function POST() {
     p_status: finalStatus,
   });
 
+  const provider =
+    providers.size === 0
+      ? null
+      : providers.size === 1
+        ? Array.from(providers)[0]
+        : "mixed";
+  if (provider) {
+    await admin.from("sms_campaigns").update({ provider }).eq("id", campaignId);
+  }
+
   if (sent === 0) {
     return NextResponse.json(
       {
@@ -317,4 +303,6 @@ export async function POST() {
     failed,
     unitsCharged: unitsUsed,
   });
-    }
+}
+
+// END OF FILE
