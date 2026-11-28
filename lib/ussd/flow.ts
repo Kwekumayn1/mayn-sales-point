@@ -14,6 +14,7 @@ import {
   orderStatusText,
   sendSms,
 } from "@/lib/ussd/core";
+import { UNAVAILABLE_TEXT, chargeSession } from "@/lib/ussd/billing";
 
 // ---------------------------------------------------------------
 // Screens
@@ -248,6 +249,9 @@ export async function advance(
         data,
       };
     }
+    // One session is charged to this vendor (once per Uzo session)
+    const ok = await chargeSession(admin, v.id, sessionId);
+    if (!ok) return done(UNAVAILABLE_TEXT);
     return show("menu", menuText(v.name), { vendorId: v.id, vendorName: v.name });
   }
 
